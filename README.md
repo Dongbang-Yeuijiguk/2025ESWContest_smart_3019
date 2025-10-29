@@ -9,8 +9,8 @@
 - **[SOOM-BE.platform](./SOOM-BE.platform/README.md)** — Backend 플랫폼 
 - **[SOOM-Voice](./SOOM-Voice/README.md)** — 온디바이스 음성 파이프라인 
 - **[SOOM-Node-RED](./SOOM-Node-RED/README.md)** — 자동화/음성/ThinQ 플로우
-- **[SOOM-AI](./SOOM-AI/README.md)** - AI 모델 초기 학습, 데이터 전처리 및 시각화 등 핵심 코드 저장소
-- **[SOOM-AI.OnDevice](./SOOM-AI.OnDevice/README.md)** - 메인 추론 파이프라인  
+- **[SOOM-AI](./SOOM-AI/README.md)** — AI 모델 초기 학습, 데이터 전처리 및 시각화 등 핵심 코드 저장소
+- **[SOOM-AI.OnDevice](./SOOM-AI.OnDevice/README.md)** — 메인 추론 파이프라인  
 - **[SOOM-AI.fine_tuning](./SOOM-AI.fine_tuning/README.md)** — 미세조정(Fine-tuning) 코드  
 - **[SOOM-EM.devices](./SOOM-EM.devices/README.md)** — ESP32 임베디드 제어 모듈
 
@@ -30,7 +30,7 @@
 SOOM은 **비접촉 수면 감지**와 **스마트홈 제어/자동화**를 결합한 플랫폼입니다.  
 - **관찰(Observation)**: 실내 환경·수면 신호를 수집하고 시각화  
 - **최적화(Optimization)**: 루틴·음성·AI 분석으로 수면 환경 자동 조정  
-- **통합 UX**: 대시보드에서 수면 리포트, 기기 제어, 자동화 설정을 한 번에
+- **통합 UX**: 대시보드에서 수면 리포트, 기기 제어, 자동화 루틴 설정을 한 번에
 
 ---
 
