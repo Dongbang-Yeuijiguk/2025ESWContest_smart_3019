@@ -1,0 +1,1610 @@
+[
+    {
+        "id": "c2fd783d28520bd7",
+        "type": "tab",
+        "label": "자동화 제어(서버)",
+        "disabled": true,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "4292e42cdfcefcbe",
+        "type": "inject",
+        "z": "c2fd783d28520bd7",
+        "name": "초기 설정(기상시간, 수면시간)",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 220,
+        "y": 40,
+        "wires": [
+            [
+                "369e77a5ad6dd251"
+            ]
+        ]
+    },
+    {
+        "id": "369e77a5ad6dd251",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "요청",
+        "method": "GET",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/user/default",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 450,
+        "y": 40,
+        "wires": [
+            [
+                "2b6d0c7561da5b55",
+                "9d83e4c943f36590"
+            ]
+        ]
+    },
+    {
+        "id": "2b6d0c7561da5b55",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "글로벌 저장",
+        "func": "let body = typeof msg.payload === 'string' ? JSON.parse(msg.payload || '{}') : (msg.payload || {});\n\n// 시:분 형식으로 변환하는 함수\nfunction formatToHourMinute(timeString) {\n    if (!timeString) return null;\n    return timeString.substring(0, 5); // \"HH:MM:SS\"에서 \"HH:MM\"만 추출\n}\n\n// 시:분 형식으로 변환하여 저장\nglobal.set('wake_time', formatToHourMinute(body.predicted_wake_time));\nglobal.set('sleep_time', formatToHourMinute(body.predicted_sleep_time));\n\nglobal.set(`ac_state`, 'free');\nglobal.set(`ap_state`, 'free');\nglobal.set(`light_state`, 'free');\nglobal.set(`curtain_state`, 'free');\nglobal.set('cur_routine',body.routine_type);\nglobal.set('cur_state', body.state);\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 610,
+        "y": 40,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "cc47cf995ad7444d",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "공기질 루틴 조건 처리",
+        "func": "let body = typeof msg.payload === 'string' ? JSON.parse(msg.payload || '{}') : (msg.payload || {});\nconst state = body.aqi;\n\nif(state > 350)return msg;\nelse return null;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 300,
+        "y": 100,
+        "wires": [
+            [
+                "3f81f388364e648e",
+                "2a2dc24b5ea78a12"
+            ]
+        ]
+    },
+    {
+        "id": "2cb78eb3c6d8743c",
+        "type": "mqtt in",
+        "z": "c2fd783d28520bd7",
+        "name": "현재 공기질",
+        "topic": "sensor/air_purifier",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "3024fb19b960fc73",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 120,
+        "y": 100,
+        "wires": [
+            [
+                "cc47cf995ad7444d"
+            ]
+        ]
+    },
+    {
+        "id": "b94843a0ab227988",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 작동 포맷",
+        "func": "let body = typeof msg.payload === 'string' ? JSON.parse(msg.payload || '{}') : (msg.payload || {});\nconst now = new Date();\nconst kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);\nconst start_time = kst.toISOString().slice(0, 19);\n\n// JSON 데이터 파싱\nconst routineData = {\n    id: body.id,\n    routine_type: body.routine_type,\n    status: body.status,\n    wakeup_time: body.wakeup_time,\n    recall_type: body.recall_type,\n    recall: body.recall,\n    ac_power: body.ac_power,\n    target_ac_temperature: body.target_ac_temperature,\n    target_ac_humidity: body.target_ac_humidity,\n    target_ac_mode: body.target_ac_mode,\n    ap_power: body.ap_power,\n    target_ap_pm: body.target_ap_pm,\n    target_ap_mode: body.target_ap_mode,\n    light_power: body.light_power,\n    light_temperature: body.light_temperature,\n    target_light_level: body.target_light_level,\n    curtain: body.curtain\n};\n\nconst acMsg = {\n    \"device_type\": \"air_conditioner\",\n    \"payload\": {\n        \"ac_power\": routineData.ac_power,\n        \"target_ac_temperature\": routineData.target_ac_temperature,\n        \"target_ac_humidity\": routineData.target_ac_humidity,\n        \"target_ac_mode\": routineData.target_ac_mode\n    }\n};\n\nconst apMsg = {\n    \"device_type\": \"air_purifier\",\n    \"payload\": {\n        \"ap_power\": routineData.ap_power,\n        \"target_ap_pm\": routineData.target_ap_pm,\n        \"target_ap_mode\": routineData.target_ap_mode\n    }\n};\n\nconst lightMsg = {\n    \"device_type\": \"smart_light\",\n    \"payload\": {\n        \"light_power\": routineData.light_power,\n        \"light_temperature\": routineData.light_temperature,\n        \"target_light_level\": routineData.target_light_level\n    }\n};\n\nconst curtainMsg = {\n    \"device_type\": \"smart_curtain\",\n    \"payload\": {\n        \"curtain\": routineData.curtain\n    }\n};\n\nconst msg1 = { payload: acMsg };\nconst msg2 = { payload: apMsg };\nconst msg3 = { payload: lightMsg };\nconst msg4 = { payload: curtainMsg };\n\nreturn [msg1,msg2,msg3,msg4];",
+        "outputs": 4,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 650,
+        "y": 100,
+        "wires": [
+            [
+                "483b922207de2525"
+            ],
+            [
+                "483b922207de2525"
+            ],
+            [
+                "483b922207de2525"
+            ],
+            [
+                "483b922207de2525"
+            ]
+        ]
+    },
+    {
+        "id": "3f81f388364e648e",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "기상 루틴",
+        "method": "GET",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/routine/wake",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 480,
+        "y": 100,
+        "wires": [
+            [
+                "b94843a0ab227988"
+            ]
+        ]
+    },
+    {
+        "id": "483b922207de2525",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 작동 요청",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/device/control",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 870,
+        "y": 100,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "1efbe076980f8e48",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "CSI state",
+        "method": "GET",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/routine/state",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 280,
+        "y": 240,
+        "wires": [
+            [
+                "c7f2dafbcf6b9c60",
+                "ccc09c8d6bf50fd7"
+            ]
+        ]
+    },
+    {
+        "id": "7ac19f0cce9f6a11",
+        "type": "inject",
+        "z": "c2fd783d28520bd7",
+        "name": "1분마다",
+        "props": [],
+        "repeat": "60",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "0.2",
+        "topic": "",
+        "x": 120,
+        "y": 240,
+        "wires": [
+            [
+                "1efbe076980f8e48",
+                "d524141155666108",
+                "bdba19e5f1ed631a"
+            ]
+        ]
+    },
+    {
+        "id": "70242d2c37fc082b",
+        "type": "switch",
+        "z": "c2fd783d28520bd7",
+        "name": "상태 분류",
+        "property": "payload",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "EMPTY",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "AWAKE",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "RESTING_ON_BED",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "PRE_SLEEP",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "SLEEPING",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 5,
+        "x": 580,
+        "y": 240,
+        "wires": [
+            [
+                "961cfc8e4b7edc5f"
+            ],
+            [
+                "d265ef2c32d24bf8"
+            ],
+            [
+                "819213e8919833e5"
+            ],
+            [
+                "7ad207f3aaff05a2"
+            ],
+            [
+                "f5b64e89511a9cd5"
+            ]
+        ]
+    },
+    {
+        "id": "c7f2dafbcf6b9c60",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "state 파싱",
+        "func": "let body = typeof msg.payload === 'string' ? JSON.parse(msg.payload || '{}') : (msg.payload || {});\nconst state = body.state;\n\nconst now = new Date();\nconst kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);\nconst time = kst.toISOString().slice(11, 16);\n\nif(state==global.get('cur_state'))return null;\n\nglobal.set('cur_time',time);\nglobal.set('cur_state',state);\nmsg.payload = state;\n\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 240,
+        "wires": [
+            [
+                "70242d2c37fc082b"
+            ]
+        ]
+    },
+    {
+        "id": "961cfc8e4b7edc5f",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "Outdoor",
+        "func": "global.set('cur_state',msg.payload);\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 740,
+        "y": 200,
+        "wires": [
+            [
+                "b63d52eb910d0a59"
+            ]
+        ]
+    },
+    {
+        "id": "b63d52eb910d0a59",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "외출 세팅 가져오기",
+        "method": "GET",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/routine/outside",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 930,
+        "y": 200,
+        "wires": [
+            [
+                "ed4bbd7c95a23fa6"
+            ]
+        ]
+    },
+    {
+        "id": "ed4bbd7c95a23fa6",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 잠금 해제",
+        "func": "global.set(`ac_state`, 'free');\nglobal.set(`ap_state`, 'free');\nglobal.set(`light_state`, 'free');\nglobal.set(`curtain_state`, 'free');\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1170,
+        "y": 160,
+        "wires": [
+            [
+                "0983b727986b92da"
+            ]
+        ]
+    },
+    {
+        "id": "4e8fba6e231e1ece",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "루틴 데이터 파싱",
+        "func": "let body = typeof msg.payload === 'string' ? JSON.parse(msg.payload || '{}') : (msg.payload || {});\nconst now = new Date();\nconst kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);\nconst start_time = kst.toISOString().slice(0, 19);\nconst trigger_time = kst.toISOString().slice(0, 10);\n\n// JSON 데이터 파싱\nconst routineData = {\n    id: body.id,\n    routine_type: body.routine_type,\n    status: body.status,\n    wakeup_time: body.wakeup_time,\n    recall_type: body.recall_type,\n    recall: body.recall,\n    ac_power: body.ac_power,\n    target_ac_temperature: body.target_ac_temperature,\n    target_ac_humidity: body.target_ac_humidity,\n    target_ac_mode: body.target_ac_mode,\n    ap_power: body.ap_power,\n    target_ap_pm: body.target_ap_pm,\n    target_ap_mode: body.target_ap_mode,\n    light_power: body.light_power,\n    light_temperature: body.light_temperature,\n    target_light_level: body.target_light_level,\n    curtain: body.curtain\n};\n\nif (routineData.status != 'enroll') return [null, null, null, null, null];\n\nconst acMsg = {\n    \"device_type\": \"air_conditioner\",\n    \"payload\": {\n        \"ac_power\": routineData.ac_power,\n        \"target_ac_temperature\": routineData.target_ac_temperature,\n        \"target_ac_humidity\": routineData.target_ac_humidity,\n        \"target_ac_mode\": routineData.target_ac_mode\n    }\n};\n\nconst apMsg = {\n    \"device_type\": \"air_purifier\",\n    \"payload\": {\n        \"ap_power\": routineData.ap_power,\n        \"target_ap_pm\": routineData.target_ap_pm,\n        \"target_ap_mode\": routineData.target_ap_mode\n    }\n};\n\nconst lightMsg = {\n    \"device_type\": \"smart_light\",\n    \"payload\": {\n        \"light_power\": routineData.light_power,\n        \"light_temperature\": routineData.light_temperature,\n        \"target_light_level\": routineData.target_light_level\n    }\n};\n\nconst curtainMsg = {\n    \"device_type\": \"smart_curtain\",\n    \"payload\": {\n        \"curtain\": routineData.curtain\n    }\n};\n\nconst msg1 = { payload: acMsg };\nconst msg2 = { payload: apMsg };\nconst msg3 = { payload: lightMsg };\nconst msg4 = { payload: curtainMsg };\n\nconst msg5 = {\n    payload: {\n        \"start_time\": start_time,\n        \"routine_type\": routineData.routine_type,\n        \"routine_id\": routineData.id,\n        \"change\": [acMsg, apMsg, lightMsg, curtainMsg]\n    }\n};\n\nconst  msg6 = trigger_time;\n\nglobal.set(\"cur_routine\",routineData.routine_type);\n\nreturn [msg1, msg2, msg3, msg4, msg5, msg6];",
+        "outputs": 6,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1360,
+        "y": 220,
+        "wires": [
+            [
+                "90d62645e8f69426"
+            ],
+            [
+                "90d62645e8f69426"
+            ],
+            [
+                "90d62645e8f69426"
+            ],
+            [
+                "90d62645e8f69426"
+            ],
+            [
+                "4008962016c24b25"
+            ],
+            [
+                "58acb4004da1f1af"
+            ]
+        ]
+    },
+    {
+        "id": "4008962016c24b25",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "제어 로그 post",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/routine/device",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1560,
+        "y": 240,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "90d62645e8f69426",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 작동 요청",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/device/control",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1570,
+        "y": 200,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "d265ef2c32d24bf8",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "Indoor",
+        "func": "global.set('cur_state', msg.payload);\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 730,
+        "y": 240,
+        "wires": [
+            [
+                "6966eab09ef0743f"
+            ]
+        ]
+    },
+    {
+        "id": "a3029416d5843975",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "실내 세팅 가져오기",
+        "method": "GET",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/routine/inside",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 930,
+        "y": 240,
+        "wires": [
+            [
+                "ed4bbd7c95a23fa6"
+            ]
+        ]
+    },
+    {
+        "id": "819213e8919833e5",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "rest",
+        "func": "global.set('cur_state',msg.payload);\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 730,
+        "y": 420,
+        "wires": [
+            [
+                "b1fc527db0016d1c"
+            ]
+        ]
+    },
+    {
+        "id": "b1fc527db0016d1c",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "밝기 낮춤",
+        "method": "GET",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/routine/inside",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 900,
+        "y": 420,
+        "wires": [
+            [
+                "429ccb450ddbb593"
+            ]
+        ]
+    },
+    {
+        "id": "429ccb450ddbb593",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 잠금 해제",
+        "func": "global.set(`ac_state`, 'free');\nglobal.set(`ap_state`, 'free');\nglobal.set(`light_state`, 'free');\nglobal.set(`curtain_state`, 'free');\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1110,
+        "y": 420,
+        "wires": [
+            [
+                "b6cfe400773b34b0"
+            ]
+        ]
+    },
+    {
+        "id": "b6cfe400773b34b0",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "루틴 데이터 파싱",
+        "func": "let body = typeof msg.payload === 'string' ? JSON.parse(msg.payload || '{}') : (msg.payload || {});\nconst now = new Date();\nconst kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);\nconst start_time = kst.toISOString().slice(0, 19);\n\n// JSON 데이터 파싱\nconst routineData = {\n    id: body.id,\n    routine_type: body.routine_type,\n    status: body.status,\n    wakeup_time: body.wakeup_time,\n    recall_type: body.recall_type,\n    recall: body.recall,\n    ac_power: body.ac_power,\n    target_ac_temperature: body.target_ac_temperature,\n    target_ac_humidity: body.target_ac_humidity,\n    target_ac_mode: body.target_ac_mode,\n    ap_power: body.ap_power,\n    target_ap_pm: body.target_ap_pm,\n    target_ap_mode: body.target_ap_mode,\n    light_power: body.light_power,\n    light_temperature: body.light_temperature,\n    target_light_level: body.target_light_level,\n    curtain: body.curtain\n};\n\nif (routineData.status != 'enroll') return [null, null, null, null];\nconst acMsg = {\n    \"device_type\": \"air_conditioner\",\n    \"payload\": {\n        \"ac_power\": routineData.ac_power,\n        \"target_ac_temperature\": routineData.target_ac_temperature,\n        \"target_ac_humidity\": routineData.target_ac_humidity,\n        \"target_ac_mode\": routineData.target_ac_mode\n    }\n};\n\nconst apMsg = {\n    \"device_type\": \"air_purifier\",\n    \"payload\": {\n        \"ap_power\": routineData.ap_power,\n        \"target_ap_pm\": routineData.target_ap_pm,\n        \"target_ap_mode\": routineData.target_ap_mode\n    }\n};\n\nconst lightMsg = {\n    \"device_type\": \"smart_light\",\n    \"payload\": {\n        \"light_power\": routineData.light_power,\n        \"light_temperature\": 2700,\n        \"target_light_level\": 25\n    }\n};\n\nconst curtainMsg = {\n    \"device_type\": \"smart_curtain\",\n    \"payload\": {\n        \"curtain\": routineData.curtain\n    }\n};\n\nconst msg1 = { payload: acMsg };\nconst msg2 = { payload: apMsg };\nconst msg3 = { payload: lightMsg };\nconst msg4 = { payload: curtainMsg };\n\nconst msg5 = {\n    payload: {\n        \"start_time\": start_time,\n        \"routine_type\": routineData.routine_type,\n        \"routine_id\": routineData.id,\n        \"change\": [acMsg, apMsg, lightMsg, curtainMsg]\n    }\n};\n\nreturn [msg1, msg2, msg3, msg4];",
+        "outputs": 4,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1340,
+        "y": 420,
+        "wires": [
+            [
+                "b66e1bcabd180ce2"
+            ],
+            [
+                "b66e1bcabd180ce2"
+            ],
+            [
+                "b66e1bcabd180ce2"
+            ],
+            [
+                "b66e1bcabd180ce2"
+            ]
+        ]
+    },
+    {
+        "id": "b66e1bcabd180ce2",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 작동 요청",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/device/control",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1550,
+        "y": 420,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "7ad207f3aaff05a2",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "pre_sleep",
+        "func": "global.set('cur_state', msg.payload);\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 740,
+        "y": 480,
+        "wires": [
+            [
+                "7e3273da1aae2fbf"
+            ]
+        ]
+    },
+    {
+        "id": "7e3273da1aae2fbf",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "조명 off",
+        "method": "GET",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/routine/inside",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 900,
+        "y": 480,
+        "wires": [
+            [
+                "090643739080736e"
+            ]
+        ]
+    },
+    {
+        "id": "b27f87c0d56d4fd9",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "루틴 데이터 파싱",
+        "func": "let body = typeof msg.payload === 'string' ? JSON.parse(msg.payload || '{}') : (msg.payload || {});\nconst now = new Date();\nconst kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);\nconst start_time = kst.toISOString().slice(0, 19);\n\n// JSON 데이터 파싱\nconst routineData = {\n    id: body.id,\n    routine_type: body.routine_type,\n    status: body.status,\n    wakeup_time: body.wakeup_time,\n    recall_type: body.recall_type,\n    recall: body.recall,\n    ac_power: body.ac_power,\n    target_ac_temperature: body.target_ac_temperature,\n    target_ac_humidity: body.target_ac_humidity,\n    target_ac_mode: body.target_ac_mode,\n    ap_power: body.ap_power,\n    target_ap_pm: body.target_ap_pm,\n    target_ap_mode: body.target_ap_mode,\n    light_power: body.light_power,\n    light_temperature: body.light_temperature,\n    target_light_level: body.target_light_level,\n    curtain: body.curtain\n};\n\nconst acMsg = {\n    \"device_type\": \"air_conditioner\",\n    \"payload\": {\n        \"ac_power\": routineData.ac_power,\n        \"target_ac_temperature\": routineData.target_ac_temperature,\n        \"target_ac_humidity\": routineData.target_ac_humidity,\n        \"target_ac_mode\": routineData.target_ac_mode\n    }\n};\n\nconst apMsg = {\n    \"device_type\": \"air_purifier\",\n    \"payload\": {\n        \"ap_power\": routineData.ap_power,\n        \"target_ap_pm\": routineData.target_ap_pm,\n        \"target_ap_mode\": routineData.target_ap_mode\n    }\n};\n\nconst lightMsg = {\n    \"device_type\": \"smart_light\",\n    \"payload\": {\n        \"light_power\": 'off',\n        \"light_temperature\": routineData.light_temperature,\n        \"target_light_level\": 25\n    }\n};\n\nconst curtainMsg = {\n    \"device_type\": \"smart_curtain\",\n    \"payload\": {\n        \"curtain\": routineData.curtain\n    }\n};\n\nconst msg1 = { payload: acMsg };\nconst msg2 = { payload: apMsg };\nconst msg3 = { payload: lightMsg };\nconst msg4 = { payload: curtainMsg };\n\nconst msg5 = {\n    payload: {\n        \"start_time\": start_time,\n        \"routine_type\": routineData.routine_type,\n        \"routine_id\": routineData.id,\n        \"change\": [acMsg, apMsg, lightMsg, curtainMsg]\n    }\n};\n\nreturn [msg1, msg2, msg3, msg4];",
+        "outputs": 4,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1340,
+        "y": 500,
+        "wires": [
+            [
+                "3323ef7a7fee76b6"
+            ],
+            [
+                "3323ef7a7fee76b6"
+            ],
+            [
+                "3323ef7a7fee76b6"
+            ],
+            [
+                "3323ef7a7fee76b6"
+            ]
+        ]
+    },
+    {
+        "id": "3323ef7a7fee76b6",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 작동 요청",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/device/control",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1550,
+        "y": 500,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "090643739080736e",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 잠금 해제",
+        "func": "global.set(`ac_state`, 'free');\nglobal.set(`ap_state`, 'free');\nglobal.set(`light_state`, 'free');\nglobal.set(`curtain_state`, 'free');\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1110,
+        "y": 500,
+        "wires": [
+            [
+                "b27f87c0d56d4fd9"
+            ]
+        ]
+    },
+    {
+        "id": "f5b64e89511a9cd5",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "sleep",
+        "func": "global.set('cur_state', msg.payload);\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 730,
+        "y": 520,
+        "wires": [
+            [
+                "502002ca1157bfe5"
+            ]
+        ]
+    },
+    {
+        "id": "6966eab09ef0743f",
+        "type": "switch",
+        "z": "c2fd783d28520bd7",
+        "name": "",
+        "property": "cur_routine",
+        "propertyType": "global",
+        "rules": [
+            {
+                "t": "neq",
+                "v": "sleep",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "sleep",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 750,
+        "y": 280,
+        "wires": [
+            [
+                "a3029416d5843975"
+            ],
+            [
+                "933340cc256e4562"
+            ]
+        ]
+    },
+    {
+        "id": "933340cc256e4562",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "수면 중 기상 판단",
+        "func": "const BEFORE = 30;  // wake_time 이전\nconst AFTER = 60;  // wake_time 이후\n\nfunction parseHHMM(s) { return parseInt(s.slice(0, 2)) * 60 + parseInt(s.slice(3, 5)); }\nfunction inWin(t, a, b) { return (a <= b) ? (t >= a && t <= b) : (t >= a || t <= b); }\n\nconst now = new Date();\nconst kst = new Date(now.getTime() + 9 * 3600000);\nconst hhmm = kst.toISOString().slice(11, 16);\nconst nowMin = parseInt(hhmm.slice(0, 2)) * 60 + parseInt(hhmm.slice(3, 5));\n\nconst wakeStr = global.get('wake_time');\nconst wakeMin = parseHHMM(wakeStr);\nconst start = (wakeMin - BEFORE + 1440) % 1440;\nconst end = (wakeMin + AFTER) % 1440;\n\nmsg.payload = inWin(nowMin, start, end) ? \"wake\" : \"sleep\";\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 900,
+        "y": 300,
+        "wires": [
+            [
+                "b95fad31189e3dac"
+            ]
+        ]
+    },
+    {
+        "id": "502002ca1157bfe5",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "수면 루틴",
+        "method": "GET",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/routine/sleep",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 880,
+        "y": 580,
+        "wires": [
+            [
+                "482f3e51515e02cb"
+            ]
+        ]
+    },
+    {
+        "id": "482f3e51515e02cb",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 작동 포맷",
+        "func": "let body = typeof msg.payload === 'string' ? JSON.parse(msg.payload || '{}') : (msg.payload || {});\nconst now = new Date();\nconst kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);\nconst start_time = kst.toISOString().slice(0, 19);\n\nglobal.set('cur_routine','sleep');\n\n// JSON 데이터 파싱\nconst routineData = {\n    id: body.id,\n    routine_type: body.routine_type,\n    status: body.status,\n    wakeup_time: body.wakeup_time,\n    recall_type: body.recall_type,\n    recall: body.recall,\n    ac_power: body.ac_power,\n    target_ac_temperature: body.target_ac_temperature,\n    target_ac_humidity: body.target_ac_humidity,\n    target_ac_mode: body.target_ac_mode,\n    ap_power: body.ap_power,\n    target_ap_pm: body.target_ap_pm,\n    target_ap_mode: body.target_ap_mode,\n    light_power: body.light_power,\n    light_temperature: body.light_temperature,\n    target_light_level: body.target_light_level,\n    curtain: body.curtain\n};\n\nif (routineData.status != 'enroll') return [null, null, null, null, null];\nconst acMsg = {\n    \"device_type\": \"air_conditioner\",\n    \"payload\": {\n        \"ac_power\": routineData.ac_power,\n        \"target_ac_temperature\": routineData.target_ac_temperature,\n        \"target_ac_humidity\": routineData.target_ac_humidity,\n        \"target_ac_mode\": routineData.target_ac_mode\n    }\n};\n\nconst apMsg = {\n    \"device_type\": \"air_purifier\",\n    \"payload\": {\n        \"ap_power\": routineData.ap_power,\n        \"target_ap_pm\": routineData.target_ap_pm,\n        \"target_ap_mode\": routineData.target_ap_mode\n    }\n};\n\nconst lightMsg = {\n    \"device_type\": \"smart_light\",\n    \"payload\": {\n        \"light_power\": routineData.light_power,\n        \"light_temperature\": routineData.light_temperature,\n        \"target_light_level\": routineData.target_light_level\n    }\n};\n\nconst curtainMsg = {\n    \"device_type\": \"smart_curtain\",\n    \"payload\": {\n        \"curtain\": routineData.curtain\n    }\n};\n\nconst msg1 = { payload: acMsg };\nconst msg2 = { payload: apMsg };\nconst msg3 = { payload: lightMsg };\nconst msg4 = { payload: curtainMsg };\n\nconst msg5 = {\n    payload: {\n        \"start_time\": start_time,\n        \"routine_type\": routineData.routine_type,\n        \"routine_id\": routineData.id,\n        \"change\": [acMsg, apMsg, lightMsg, curtainMsg]\n    }\n};\n\nreturn [msg5, msg1, msg2, msg3, msg4];",
+        "outputs": 5,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1090,
+        "y": 600,
+        "wires": [
+            [
+                "5047637bbddcb14c"
+            ],
+            [
+                "c12d38b4673e4a31"
+            ],
+            [
+                "c12d38b4673e4a31"
+            ],
+            [
+                "285c4bee3deefd55"
+            ],
+            [
+                "285c4bee3deefd55"
+            ]
+        ]
+    },
+    {
+        "id": "5047637bbddcb14c",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "제어 로그 post",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/routine/device",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1340,
+        "y": 580,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "285c4bee3deefd55",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 작동 요청",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/device/control",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1350,
+        "y": 660,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "c12d38b4673e4a31",
+        "type": "delay",
+        "z": "c2fd783d28520bd7",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "30",
+        "timeoutUnits": "minutes",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 1330,
+        "y": 620,
+        "wires": [
+            [
+                "d31edd63c333ba03"
+            ]
+        ]
+    },
+    {
+        "id": "d31edd63c333ba03",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 작동 요청",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/device/control",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1510,
+        "y": 620,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "fd9d36631940c358",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "루틴 데이터 파싱",
+        "func": "let body = typeof msg.payload === 'string' ? JSON.parse(msg.payload || '{}') : (msg.payload || {});\nconst now = new Date();\nconst kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);\nconst start_time = kst.toISOString().slice(0, 19);\n\n// JSON 데이터 파싱\nconst routineData = {\n    id: body.id,\n    routine_type: body.routine_type,\n    status: body.status,\n    wakeup_time: body.wakeup_time,\n    recall_type: body.recall_type,\n    recall: body.recall,\n    ac_power: body.ac_power,\n    target_ac_temperature: body.target_ac_temperature,\n    target_ac_humidity: body.target_ac_humidity,\n    target_ac_mode: body.target_ac_mode,\n    ap_power: body.ap_power,\n    target_ap_pm: body.target_ap_pm,\n    target_ap_mode: body.target_ap_mode,\n    light_power: body.light_power,\n    light_temperature: body.light_temperature,\n    target_light_level: body.target_light_level,\n    curtain: body.curtain\n};\n\nconst lightMsg = {\n    \"device_type\": \"smart_light\",\n    \"payload\": {\n        \"light_power\": 'on',\n        \"light_temperature\": routineData.light_temperature,\n        \"target_light_level\": 25\n    }\n};\n\nconst msg3 = { payload: lightMsg };\n\nconst msg5 = {\n    payload: {\n        \"start_time\": start_time,\n        \"routine_type\": routineData.routine_type,\n        \"routine_id\": routineData.id,\n        \"change\": [lightMsg]\n    }\n};\n\nreturn [msg3,msg5];",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1360,
+        "y": 340,
+        "wires": [
+            [
+                "6cb12437703203ca"
+            ]
+        ]
+    },
+    {
+        "id": "6cb12437703203ca",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 작동 요청",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/device/control",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1550,
+        "y": 340,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "3648bd05f97d8ba5",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "수면 중 기상",
+        "method": "GET",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/routine/sleep",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1190,
+        "y": 340,
+        "wires": [
+            [
+                "fd9d36631940c358"
+            ]
+        ]
+    },
+    {
+        "id": "b95fad31189e3dac",
+        "type": "switch",
+        "z": "c2fd783d28520bd7",
+        "name": "",
+        "property": "payload",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "wake",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "sleep",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 1030,
+        "y": 340,
+        "wires": [
+            [
+                "6cc6ef4bbdeb3646"
+            ],
+            [
+                "3648bd05f97d8ba5"
+            ]
+        ]
+    },
+    {
+        "id": "6cc6ef4bbdeb3646",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "기상",
+        "method": "GET",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/routine/wake",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1090,
+        "y": 280,
+        "wires": [
+            [
+                "be5d41615e5ac57e"
+            ]
+        ]
+    },
+    {
+        "id": "d524141155666108",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "수면 전 시간 분류",
+        "func": "const t = global.get('sleep_time');\nconst now = new Date();\nconst kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);\nconst val = kst.toISOString().slice(11, 16);\n\n// 문자열을 분으로 바꿔서 비교\nfunction toMinutes(timeStr) {\n    const [hh, mm] = timeStr.split(':').map(Number);\n    return hh * 60 + mm;\n}\n\nconst target = toMinutes(t);\nconst cur = toMinutes(val);\n\nlet diff = target - cur;\n\nif (diff < 0) diff += 24 * 60;  // 자정을 넘어가는 경우 보정\n\nif (diff == 30) {\n    return { payload: '30' };\n} else if (diff == 15) {\n    return { payload: '15' };\n} else if (diff == 5) {\n    return { payload: '5' };\n} else {\n    return null;\n}",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 300,
+        "y": 360,
+        "wires": [
+            [
+                "697aa14e0332bf7d"
+            ]
+        ]
+    },
+    {
+        "id": "697aa14e0332bf7d",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "수면 세팅 가져오기",
+        "method": "GET",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/routine/sleep",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 350,
+        "y": 440,
+        "wires": [
+            [
+                "9bc5b64cac02233a"
+            ]
+        ]
+    },
+    {
+        "id": "9bc5b64cac02233a",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "수면  전 디바이스 세팅",
+        "func": "let body = typeof msg.payload === 'string' ? JSON.parse(msg.payload || '{}') : (msg.payload || {});\nconst now = new Date();\nconst start_time = now.toISOString().slice(0, 19);\nconst diff = global.get('diff');\n// JSON 데이터 파싱\nconst routineData = {\n    id: body.id,\n    routine_type: body.routine_type,\n    status: body.status,\n    wakeup_time: body.wakeup_time,\n    recall_type: body.recall_type,\n    recall: body.recall,\n    ac_power: body.ac_power,\n    target_ac_temperature: body.target_ac_temperature,\n    target_ac_humidity: body.target_ac_humidity,\n    target_ac_mode: body.target_ac_mode,\n    ap_power: body.ap_power,\n    target_ap_pm: body.target_ap_pm,\n    target_ap_mode: body.target_ap_mode,\n    light_power: body.light_power,\n    light_temperature: body.light_temperature,\n    target_light_level: body.target_light_level,\n    curtain: body.curtain\n};\n\nif (routineData.status != 'enroll') return [null, null, null, null];\n\nif (diff == 30){\n    var lightMsg = {\n        \"device_type\": \"smart_light\",\n        \"payload\": {\n            \"light_power\": routineData.light_power,\n            \"light_temperature\": routineData.light_temperature,\n            \"target_light_level\": \"50\"\n        }\n    };\n\n    var curtainMsg = {\n        \"device_type\": \"smart_curtain\",\n        \"payload\": {\n            \"curtain\": routineData.curtain\n        }\n    };\n\n    var msg1 = null;\n    var msg2 = null;\n    var msg3,msg4;\n    if (global.get('light_state') == 'lock'){\n        msg3 = null;\n        lightMsg = null;\n    }\n    else msg3 = { payload: lightMsg }; \n    if (global.get('curtain_state') == 'lock'){\n        msg4 = null;\n        curtainMsg = null;\n    }\n    else msg4 = { payload: curtainMsg };    \n\n    return [msg1, msg2, msg3, msg4];\n}\nelse if (diff == 15) {\n    var apMsg = {\n        \"device_type\": \"air_purifier\",\n        \"payload\": {\n            \"ap_power\": 'off',\n            \"target_ap_pm\": routineData.target_ap_pm,\n            \"target_ap_mode\": routineData.target_ap_mode\n        }\n    };\n    var curtainMsg = {\n        \"device_type\": \"smart_curtain\",\n        \"payload\": {\n            \"curtain\": routineData.curtain\n        }\n    };\n    \n    var msg1 = null;\n    var msg2,msg4;\n    if(global.get('ap_state') == 'lock') {\n        msg2 = null;\n        apMsg = null;\n    }\n    else msg2 = { payload: apMsg };\n    var msg3 = null;\n    if (global.get('curtain_state') == 'lock'){\n        msg4 = null;\n        curtainMsg = null;\n    }\n    else msg4 = { payload: curtainMsg };  \n\n    return [msg1, msg2, msg3, msg4];\n}\nelse if (diff == 5) {\n    var acMsg = {\n        \"device_type\": \"air_conditioner\",\n        \"payload\": {\n            \"ac_power\": 'off',\n            \"target_ac_temperature\": routineData.target_ac_temperature,\n            \"target_ac_humidity\": routineData.target_ac_humidity,\n            \"target_ac_mode\": routineData.target_ac_mode\n        }\n    };\n\n    var lightMsg = {\n        \"device_type\": \"smart_light\",\n        \"payload\": {\n            \"light_power\": routineData.light_power,\n            \"light_temperature\": routineData.light_temperature,\n            \"target_light_level\": \"25\"\n        }\n    };\n    var curtainMsg = {\n        \"device_type\": \"smart_curtain\",\n        \"payload\": {\n            \"curtain\": routineData.curtain\n        }\n    };\n\n    var msg1,msg3,msg4;\n    if (global.get('ac_state') == 'lock'){\n        msg1 = null;\n        acMsg = null;\n    }\n    else msg1 = { payload : acMsg };\n\n    var msg2 = null;\n\n    if (global.get('light_state') == 'lock'){\n        msg3 = null;\n        lightMsg = null;\n    }\n    else msg3 = { payload: lightMsg }; \n    \n    if (global.get('curtain_state') == 'lock'){\n        msg4 = null;\n        curtainMsg = null;\n    }\n    else msg4 = { payload : curtainMsg };\n\n    return [msg1, msg2, msg3, msg4];\n}\n\nelse return [null, null, null, null];\n",
+        "outputs": 4,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 560,
+        "wires": [
+            [
+                "2a719b839612b85b"
+            ],
+            [
+                "2a719b839612b85b"
+            ],
+            [
+                "2a719b839612b85b"
+            ],
+            [
+                "2a719b839612b85b"
+            ]
+        ]
+    },
+    {
+        "id": "2a719b839612b85b",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 작동 요청",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/device/control",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 670,
+        "y": 580,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "2a2dc24b5ea78a12",
+        "type": "mqtt out",
+        "z": "c2fd783d28520bd7",
+        "name": "경고 알림",
+        "topic": "/voice/alert",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "3024fb19b960fc73",
+        "x": 480,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "ccc09c8d6bf50fd7",
+        "type": "debug",
+        "z": "c2fd783d28520bd7",
+        "name": "debug 2",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 440,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "9d83e4c943f36590",
+        "type": "debug",
+        "z": "c2fd783d28520bd7",
+        "name": "debug 3",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 780,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "58acb4004da1f1af",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "수면 리포트 트리거",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/dashboard/analysis/create",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1570,
+        "y": 280,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "bdba19e5f1ed631a",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "기상 시간 판단",
+        "func": "if(global.get('cur_routine')=='sleep'){\n    const t = global.get('wake_time');\n    const now = new Date();\n    const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);\n    const val = kst.toISOString().slice(11, 16);\n\n    if(t==val)return msg;\n}\nelse return null;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 300,
+        "y": 700,
+        "wires": [
+            [
+                "859cd4d439122eca",
+                "0bb1da9a617ea35f"
+            ]
+        ]
+    },
+    {
+        "id": "859cd4d439122eca",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "기상 세팅 가져오기",
+        "method": "GET",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/routine/wake",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 490,
+        "y": 700,
+        "wires": [
+            [
+                "332bbecd16cc0191"
+            ]
+        ]
+    },
+    {
+        "id": "08c01a83a0c73667",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "제어 로그 post",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/routine/device",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1100,
+        "y": 720,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "4c8de27a55e2f6b2",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "루틴 데이터 파싱",
+        "func": "let body = typeof msg.payload === 'string' ? JSON.parse(msg.payload || '{}') : (msg.payload || {});\nconst now = new Date();\nconst kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);\nconst start_time = kst.toISOString().slice(0, 19);\nconst trigger_time = kst.toISOString().slice(0, 10);\n\n// JSON 데이터 파싱\nconst routineData = {\n    id: body.id,\n    routine_type: body.routine_type,\n    status: body.status,\n    wakeup_time: body.wakeup_time,\n    recall_type: body.recall_type,\n    recall: body.recall,\n    ac_power: body.ac_power,\n    target_ac_temperature: body.target_ac_temperature,\n    target_ac_humidity: body.target_ac_humidity,\n    target_ac_mode: body.target_ac_mode,\n    ap_power: body.ap_power,\n    target_ap_pm: body.target_ap_pm,\n    target_ap_mode: body.target_ap_mode,\n    light_power: body.light_power,\n    light_temperature: body.light_temperature,\n    target_light_level: body.target_light_level,\n    curtain: body.curtain\n};\n\nif (routineData.status != 'enroll') return [null, null, null, null, null];\n\nconst acMsg = {\n    \"device_type\": \"air_conditioner\",\n    \"payload\": {\n        \"ac_power\": routineData.ac_power,\n        \"target_ac_temperature\": routineData.target_ac_temperature,\n        \"target_ac_humidity\": routineData.target_ac_humidity,\n        \"target_ac_mode\": routineData.target_ac_mode\n    }\n};\n\nconst apMsg = {\n    \"device_type\": \"air_purifier\",\n    \"payload\": {\n        \"ap_power\": routineData.ap_power,\n        \"target_ap_pm\": routineData.target_ap_pm,\n        \"target_ap_mode\": routineData.target_ap_mode\n    }\n};\n\nconst lightMsg = {\n    \"device_type\": \"smart_light\",\n    \"payload\": {\n        \"light_power\": routineData.light_power,\n        \"light_temperature\": routineData.light_temperature,\n        \"target_light_level\": routineData.target_light_level\n    }\n};\n\nconst curtainMsg = {\n    \"device_type\": \"smart_curtain\",\n    \"payload\": {\n        \"curtain\": routineData.curtain\n    }\n};\n\nconst msg1 = { payload: acMsg };\nconst msg2 = { payload: apMsg };\nconst msg3 = { payload: lightMsg };\nconst msg4 = { payload: curtainMsg };\n\nconst msg5 = {\n    payload: {\n        \"start_time\": start_time,\n        \"routine_type\": routineData.routine_type,\n        \"routine_id\": routineData.id,\n        \"change\": [acMsg, apMsg, lightMsg, curtainMsg]\n    }\n};\n\nconst  msg6 = trigger_time;\n\nglobal.set(\"cur_routine\",routineData.routine_type);\n\nreturn [msg1, msg2, msg3, msg4, msg5, msg6];",
+        "outputs": 6,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 900,
+        "y": 700,
+        "wires": [
+            [
+                "9203a6bcc37de6d7"
+            ],
+            [
+                "9203a6bcc37de6d7"
+            ],
+            [
+                "9203a6bcc37de6d7"
+            ],
+            [
+                "9203a6bcc37de6d7"
+            ],
+            [
+                "08c01a83a0c73667"
+            ],
+            [
+                "402988f6d496e73a"
+            ]
+        ]
+    },
+    {
+        "id": "9203a6bcc37de6d7",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 작동 요청",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/device/control",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1110,
+        "y": 680,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "402988f6d496e73a",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "수면 리포트 트리거",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/dashboard/analysis/create",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1110,
+        "y": 760,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "332bbecd16cc0191",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 잠금 해제",
+        "func": "global.set(`ac_state`, 'free');\nglobal.set(`ap_state`, 'free');\nglobal.set(`light_state`, 'free');\nglobal.set(`curtain_state`, 'free');\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 710,
+        "y": 700,
+        "wires": [
+            [
+                "4c8de27a55e2f6b2"
+            ]
+        ]
+    },
+    {
+        "id": "be5d41615e5ac57e",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 잠금 해제",
+        "func": "global.set(`ac_state`, 'free');\nglobal.set(`ap_state`, 'free');\nglobal.set(`light_state`, 'free');\nglobal.set(`curtain_state`, 'free');\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1170,
+        "y": 220,
+        "wires": [
+            [
+                "4e8fba6e231e1ece"
+            ]
+        ]
+    },
+    {
+        "id": "0983b727986b92da",
+        "type": "function",
+        "z": "c2fd783d28520bd7",
+        "name": "루틴 데이터 파싱",
+        "func": "let body = typeof msg.payload === 'string' ? JSON.parse(msg.payload || '{}') : (msg.payload || {});\nconst now = new Date();\nconst kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);\nconst start_time = kst.toISOString().slice(0, 19);\n\n// JSON 데이터 파싱\nconst routineData = {\n    id: body.id,\n    routine_type: body.routine_type,\n    status: body.status,\n    wakeup_time: body.wakeup_time,\n    recall_type: body.recall_type,\n    recall: body.recall,\n    ac_power: body.ac_power,\n    target_ac_temperature: body.target_ac_temperature,\n    target_ac_humidity: body.target_ac_humidity,\n    target_ac_mode: body.target_ac_mode,\n    ap_power: body.ap_power,\n    target_ap_pm: body.target_ap_pm,\n    target_ap_mode: body.target_ap_mode,\n    light_power: body.light_power,\n    light_temperature: body.light_temperature,\n    target_light_level: body.target_light_level,\n    curtain: body.curtain\n};\n\nif (routineData.status != 'enroll') return [null, null, null, null, null];\n\nconst acMsg = {\n    \"device_type\": \"air_conditioner\",\n    \"payload\": {\n        \"ac_power\": routineData.ac_power,\n        \"target_ac_temperature\": routineData.target_ac_temperature,\n        \"target_ac_humidity\": routineData.target_ac_humidity,\n        \"target_ac_mode\": routineData.target_ac_mode\n    }\n};\n\nconst apMsg = {\n    \"device_type\": \"air_purifier\",\n    \"payload\": {\n        \"ap_power\": routineData.ap_power,\n        \"target_ap_pm\": routineData.target_ap_pm,\n        \"target_ap_mode\": routineData.target_ap_mode\n    }\n};\n\nconst lightMsg = {\n    \"device_type\": \"smart_light\",\n    \"payload\": {\n        \"light_power\": routineData.light_power,\n        \"light_temperature\": routineData.light_temperature,\n        \"target_light_level\": routineData.target_light_level\n    }\n};\n\nconst curtainMsg = {\n    \"device_type\": \"smart_curtain\",\n    \"payload\": {\n        \"curtain\": routineData.curtain\n    }\n};\n\nconst msg1 = { payload: acMsg };\nconst msg2 = { payload: apMsg };\nconst msg3 = { payload: lightMsg };\nconst msg4 = { payload: curtainMsg };\n\nconst msg5 = {\n    payload: {\n        \"start_time\": start_time,\n        \"routine_type\": routineData.routine_type,\n        \"routine_id\": routineData.id,\n        \"change\": [acMsg, apMsg, lightMsg, curtainMsg]\n    }\n};\n\n\nglobal.set(\"cur_routine\",routineData.routine_type);\n\nreturn [msg1, msg2, msg3, msg4, msg5];",
+        "outputs": 5,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1360,
+        "y": 100,
+        "wires": [
+            [
+                "a4d22c6c7052a5db"
+            ],
+            [
+                "a4d22c6c7052a5db"
+            ],
+            [
+                "a4d22c6c7052a5db"
+            ],
+            [
+                "a4d22c6c7052a5db"
+            ],
+            [
+                "4a98f0b6c738f4d1"
+            ]
+        ]
+    },
+    {
+        "id": "a4d22c6c7052a5db",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "디바이스 작동 요청",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/device/control",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1570,
+        "y": 80,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "4a98f0b6c738f4d1",
+        "type": "http request",
+        "z": "c2fd783d28520bd7",
+        "name": "제어 로그 post",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/routine/device",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1560,
+        "y": 120,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "0bb1da9a617ea35f",
+        "type": "mqtt out",
+        "z": "c2fd783d28520bd7",
+        "name": "기상 알림",
+        "topic": "/voice/alarm",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "3024fb19b960fc73",
+        "x": 460,
+        "y": 760,
+        "wires": []
+    },
+    {
+        "id": "66b62cbef638e1d9",
+        "type": "inject",
+        "z": "c2fd783d28520bd7",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 220,
+        "y": 160,
+        "wires": [
+            [
+                "2a2dc24b5ea78a12"
+            ]
+        ]
+    },
+    {
+        "id": "e8291c806c253b6f",
+        "type": "inject",
+        "z": "c2fd783d28520bd7",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 200,
+        "y": 760,
+        "wires": [
+            [
+                "0bb1da9a617ea35f"
+            ]
+        ]
+    },
+    {
+        "id": "3024fb19b960fc73",
+        "type": "mqtt-broker",
+        "name": "mqtt 서버",
+        "broker": "http://13.209.47.2",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    }
+]
