@@ -1,0 +1,61 @@
+menu "Smart Curtain Configuration"
+
+    menu "Wi-Fi Settings"
+        config WIFI_SSID
+            string "Wi-Fi SSID"
+            default "MyWiFi"
+
+        config WIFI_PASSWORD
+            string "Wi-Fi Password"
+            default "MyPassword"
+    endmenu
+
+    menu "MQTT Settings"
+        config MQTT_BROKER_URI
+            string "MQTT Broker URI"
+            default "mqtt://192.168.0.10:1883"
+
+        config MQTT_TOPIC_CMD
+            string "MQTT Command Topic"
+            default "sensor/smart_curtain/cmd"
+
+        config MQTT_TOPIC_STATE
+            string "MQTT State Topic"
+            default "sensor/smart_curtain"
+    endmenu
+
+    menu "Curtain Stepper Settings"
+        config CURTAIN_STEP_GPIO
+            int "Stepper STEP GPIO"
+            default 3
+
+        config CURTAIN_DIR_GPIO
+            int "Stepper DIR GPIO"
+            default 4
+
+        config CURTAIN_EN_GPIO
+            int "Stepper EN GPIO"
+            default 8
+
+        config CURTAIN_EN_ACTIVE_LOW
+            bool "Enable Active Low"
+            default y
+
+        config CURTAIN_DIR_INVERTED
+            bool "Invert Direction"
+            default y
+
+        config CURTAIN_PULSE_US
+            int "Pulse width (us)"
+            default 700
+
+        config CURTAIN_STEP_GAP_US
+            int "Step gap (us)"
+            default 700
+
+        config CURTAIN_TOTAL_STEPS
+            int "Total steps to fully open"
+            default 2000
+    endmenu
+
+endmenu

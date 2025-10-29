@@ -1,0 +1,39 @@
+menu "SOOM Air Conditioner Configuration"
+
+    menu "Wi-Fi Settings"
+        config WIFI_SSID
+            string "Wi-Fi SSID"
+            default "MyWiFi"
+        config WIFI_PASS
+            string "Wi-Fi Password"
+            default "MyPassword"
+    endmenu
+
+    menu "MQTT Settings"
+        config MQTT_URI
+            string "MQTT Broker URI"
+            default "mqtt://192.168.0.10:1883"
+        config MQTT_TOPIC_SENSOR
+            string "MQTT Sensor Topic"
+            default "sensor/aircondition"
+        config MQTT_TOPIC_CMD
+            string "MQTT Command Topic"
+            default "sensor/air_conditioner/cmd"
+    endmenu
+
+    menu "GPIO Settings"
+        config MOTOR_A1A
+            int "Motor A1A GPIO"
+            default 1
+        config MOTOR_A1B
+            int "Motor A1B GPIO"
+            default 2
+        config RELAY_GPIO
+            int "Relay GPIO"
+            default 3
+        config DHT_GPIO
+            int "DHT22 GPIO"
+            default 4
+    endmenu
+
+endmenu
