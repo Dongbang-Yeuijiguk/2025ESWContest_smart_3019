@@ -1,0 +1,396 @@
+[
+    {
+        "id": "8f3df43329ceb8fe",
+        "type": "tab",
+        "label": "음성 제어",
+        "disabled": true,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "d7cbf37c89133205",
+        "type": "http in",
+        "z": "8f3df43329ceb8fe",
+        "name": "음성 입력",
+        "url": "/api/v1/input/voice",
+        "method": "post",
+        "upload": false,
+        "skipBodyParsing": false,
+        "swaggerDoc": "",
+        "x": 160,
+        "y": 100,
+        "wires": [
+            [
+                "bff76709e662369e",
+                "7354a266e5884aeb",
+                "8adc0ad8b81b75c2"
+            ]
+        ]
+    },
+    {
+        "id": "bff76709e662369e",
+        "type": "http response",
+        "z": "8f3df43329ceb8fe",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 430,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "c18caa9505f654ae",
+        "type": "function",
+        "z": "8f3df43329ceb8fe",
+        "name": "제어 로그 포맷",
+        "func": "const now = new Date();\nconst kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);\nconst start_time = kst.toISOString().slice(0, 19);\n\nconst mSg = {\n    payload: {\n        \"start_time\": start_time,\n        \"routine_type\": 'voice',\n        \"routine_id\": null,\n        \"change\": msg.payload\n    }\n};\nreturn mSg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 940,
+        "y": 60,
+        "wires": [
+            [
+                "0fe0142b803904f3"
+            ]
+        ]
+    },
+    {
+        "id": "e222f5481b871b47",
+        "type": "function",
+        "z": "8f3df43329ceb8fe",
+        "name": "디바이스 잠금 설정",
+        "func": "const device = msg.payload.device_type;\nglobal.set(`${device}_state`,'lock');\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 710,
+        "y": 120,
+        "wires": [
+            [
+                "d8673e004d4a309f",
+                "fc593a111f4e5f73",
+                "c18caa9505f654ae"
+            ]
+        ]
+    },
+    {
+        "id": "0fe0142b803904f3",
+        "type": "http request",
+        "z": "8f3df43329ceb8fe",
+        "name": "제어 로그 post",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/routine/device",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 1120,
+        "y": 60,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "d8673e004d4a309f",
+        "type": "delay",
+        "z": "8f3df43329ceb8fe",
+        "name": "1시간 lock",
+        "pauseType": "queue",
+        "timeout": "1",
+        "timeoutUnits": "hours",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "hour",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": true,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 920,
+        "y": 180,
+        "wires": [
+            [
+                "671b1340bc7d51ce"
+            ]
+        ]
+    },
+    {
+        "id": "fc593a111f4e5f73",
+        "type": "http request",
+        "z": "8f3df43329ceb8fe",
+        "name": "디바이스 작동 요청",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/device/control",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 950,
+        "y": 120,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "671b1340bc7d51ce",
+        "type": "function",
+        "z": "8f3df43329ceb8fe",
+        "name": "디바이스 잠금 해제",
+        "func": "const device = msg.payload.device_type;\nglobal.set(`${device}_state`, 'free');\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1090,
+        "y": 180,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "7354a266e5884aeb",
+        "type": "switch",
+        "z": "8f3df43329ceb8fe",
+        "name": "음성 명령 분류",
+        "property": "payload.intent.category",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "device_control",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "routine_setting",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 220,
+        "y": 180,
+        "wires": [
+            [
+                "42bcebbd57f3ba1a"
+            ],
+            [
+                "9f466d677cf028c2"
+            ]
+        ]
+    },
+    {
+        "id": "42bcebbd57f3ba1a",
+        "type": "function",
+        "z": "8f3df43329ceb8fe",
+        "name": "디바이스 제어 파싱",
+        "func": "let body = typeof msg.payload === 'string' ? JSON.parse(msg.payload || '{}') : (msg.payload || {});\n\nconst device_type = body.intent.device_type;\nconst params = body.intent.payload;\n\nmsg.payload = {\n    device_type: device_type,\n    payload: params\n}\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 470,
+        "y": 120,
+        "wires": [
+            [
+                "e222f5481b871b47"
+            ]
+        ]
+    },
+    {
+        "id": "9f466d677cf028c2",
+        "type": "function",
+        "z": "8f3df43329ceb8fe",
+        "name": "예상 기상 시간",
+        "func": "// let body = typeof msg.payload === 'string' ? JSON.parse(msg.payload || '{}') : (msg.payload || {});\n// const now = new Date();\n// const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);\n// const date = kst.toISOString().slice(0, 10);\n// const predicted_wake_time = body.intent.payload.time;\n// const pre_time = date + 'T' + predicted_wake_time;\n\n// msg.payload = {\n//     date: date,\n//     predicted_wake_time : pre_time\n// }\n\n// return msg;\n\nconst now = new Date();\nconst kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);\nconst date = kst.toISOString().slice(0, 10);\nconst pre_time = date + 'T' + '08:00';\nmsg.payload = {\n    date: date,\n    predicted_wake_time : pre_time\n}\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 410,
+        "y": 260,
+        "wires": [
+            [
+                "429ca7c38f79a3ff",
+                "6f03a1e01fd9b3b6"
+            ]
+        ]
+    },
+    {
+        "id": "429ca7c38f79a3ff",
+        "type": "http request",
+        "z": "8f3df43329ceb8fe",
+        "name": "기상 시간 post",
+        "method": "POST",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "http://localhost:8000/api/v1/user/set",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 620,
+        "y": 260,
+        "wires": [
+            [
+                "3cc5127b982d3911",
+                "dfcccb92c9f36e3f"
+            ]
+        ]
+    },
+    {
+        "id": "8adc0ad8b81b75c2",
+        "type": "debug",
+        "z": "8f3df43329ceb8fe",
+        "name": "debug 6",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 260,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "3cc5127b982d3911",
+        "type": "mqtt out",
+        "z": "8f3df43329ceb8fe",
+        "name": "수면 시간 알림",
+        "topic": "/voice/sleep",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "3024fb19b960fc73",
+        "x": 960,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "dfcccb92c9f36e3f",
+        "type": "debug",
+        "z": "8f3df43329ceb8fe",
+        "name": "debug 5",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 840,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "cc2385df4f95a732",
+        "type": "inject",
+        "z": "8f3df43329ceb8fe",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 180,
+        "y": 300,
+        "wires": [
+            [
+                "9f466d677cf028c2"
+            ]
+        ]
+    },
+    {
+        "id": "6f03a1e01fd9b3b6",
+        "type": "debug",
+        "z": "8f3df43329ceb8fe",
+        "name": "debug 7",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 620,
+        "y": 340,
+        "wires": []
+    },
+    {
+        "id": "3024fb19b960fc73",
+        "type": "mqtt-broker",
+        "name": "mqtt 서버",
+        "broker": "http://13.209.47.2",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    }
+]
