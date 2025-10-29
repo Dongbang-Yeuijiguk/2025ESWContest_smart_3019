@@ -1,0 +1,6 @@
+.env
+sample
+.venv
+__pycache__
+tests
+tts_cache
