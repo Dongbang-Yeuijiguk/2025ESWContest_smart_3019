@@ -1,0 +1,30 @@
+.factor-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  font-size: 22px;
+  font-weight: 800;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  line-height: 1;
+}
+
+/* 상태별 색상 */
+.factor-badge.good {
+  color: #1B5E20;
+  background: rgba(27, 94, 32, 0.08);
+  border-color: rgba(27, 94, 32, 0.35);
+}
+
+.factor-badge.normal {
+  color: #7A4A00;
+  background: rgba(250, 170, 20, 0.12);
+  border-color: rgba(250, 170, 20, 0.55);
+}
+
+.factor-badge.bad {
+  color: #A50034;
+  background: rgba(165, 0, 52, 0.10);
+  border-color: rgba(165, 0, 52, 0.55);
+}

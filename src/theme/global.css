@@ -1,0 +1,65 @@
+/* 다크/라이트 기본 배경 & 텍스트 */
+body[data-theme='dark']  { background: #000; color: #fff; }
+body[data-theme='light'] { background: #f9f9f9; color: #222; }
+
+/* 카드 공통 */
+.card {
+  border-radius: 12px;
+  padding: 12px;
+}
+
+/* 다크 카드: 반투명 */
+.card--dark {
+  background: rgba(255,255,255,0.06);
+  outline: 1px solid rgba(255,255,255,0.10);
+}
+
+/* 라이트 카드: 흰 바탕 + 그림자 */
+.card--light {
+  background: #fff;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+  outline: 1px solid rgba(0,0,0,0.04);
+}
+
+/* ===== LG EI Text Font Families ===== */
+@font-face {
+  font-family: 'LGEIText';
+  src: url('../assets/fonts/LGEITextTTF-Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LGEIText';
+  src: url('../assets/fonts/LGEITextTTF-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LGEIText';
+  src: url('../assets/fonts/LGEITextTTF-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'LGEIText';
+  src: url('../assets/fonts/LGEITextTTF-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+body {
+  font-family: 'LGEIText', sans-serif;
+}
+
+html, body {
+  width: 1024px;
+  height: 600px;
+  overflow: hidden;
+}
