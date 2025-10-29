@@ -1,0 +1,74 @@
+menu "SOOM Air Purifier (PMS7003 + MQ135 + OLED)"
+
+    menu "Wi-Fi"
+        config WIFI_SSID
+            string "Wi-Fi SSID"
+            default "MyWiFi"
+        config WIFI_PASSWORD
+            string "Wi-Fi Password"
+            default "password1234"
+    endmenu
+
+    menu "MQTT"
+        config MQTT_BROKER_URI
+            string "Broker URI (mqtt://host:port)"
+            default "mqtt://13.209.47.2:1883"
+        config MQTT_TOPIC
+            string "Publish topic"
+            default "sensor/air_purifier"
+        config MQTT_CMD_TOPIC
+            string "Command topic"
+            default "sensor/air_purifier/cmd"
+    endmenu
+
+    menu "PMS7003 UART"
+        config PMS_UART_PORT
+            int "UART port (0/1/2)"
+            range 0 2
+            default 1
+        config PMS_UART_TX_GPIO
+            int "TX GPIO"
+            default 20
+        config PMS_UART_RX_GPIO
+            int "RX GPIO"
+            default 21
+        config PMS_UART_BAUD
+            int "Baudrate"
+            default 9600
+    endmenu
+
+    menu "MQ135 (ADC1)"
+        config MQ135_ADC_CHANNEL
+            int "ADC1 channel (0=CH0, …)"
+            range 0 9
+            default 0
+        config MQ135_ADC_ATTEN
+            int "ADC attenuation (0=0dB,1=2.5dB,2=6dB,3=11dB)"
+            range 0 3
+            default 3
+        config MQ135_SAMPLES
+            int "Averaging samples"
+            range 1 64
+            default 8
+        config MQ135_RL_KOHM
+            int "RL (kΩ)"
+            range 1 100
+            default 10
+        config MQ135_R0_KOHM
+            int "R0 (kΩ, clean air)"
+            range 1 100
+            default 30
+        config MQ135_VREF_MV
+            int "Fallback Vref (mV)"
+            range 900 1300
+            default 1100
+        config AP_RELAY_GPIO
+            int "Relay GPIO"
+            default 10
+        config AQ_THRESHOLD
+            int "AQ ON threshold (hysteresis base)"
+            range 1 500
+            default 50
+    endmenu
+
+endmenu

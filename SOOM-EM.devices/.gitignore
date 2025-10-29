@@ -1,0 +1,106 @@
+# ============================================================
+# Global ignores (공통)
+# ============================================================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.bak
+*.tmp
+*.log
+*.orig
+*~
+.vscode/
+.idea/
+__pycache__/
+*.pyc
+
+# ============================================================
+# ESP-IDF build artifacts
+# ============================================================
+/build/
+/sdkconfig
+/sdkconfig.old
+/sdkconfig.defaults
+/sdkconfig.ci
+/flash_project_args
+/project_description.json
+/cmake-build-*/
+/cmake_install.cmake
+/compile_commands.json
+CMakeFiles/
+CMakeCache.txt
+
+# ---- Add Kconfig files ----
+/Kconfig
+/Kconfig.old
+/Kconfig.projbuild
+/Kconfig.projbuild.old
+/Kconfig.projbuild.example
+/Kconfig.defaults
+
+
+# ============================================================
+# Local environment / secrets
+# ============================================================
+.env
+.env.*
+!.env.example
+
+# ============================================================
+# Generated artifacts / binaries
+# ============================================================
+*.bin
+*.elf
+*.map
+*.hex
+*.uf2
+*.a
+
+# ============================================================
+# Editor / Tool-specific
+# ============================================================
+# VSCode
+.vscode/
+*.code-workspace
+
+# CLion
+cmake-build-debug/
+cmake-build-release/
+
+# ============================================================
+# Python virtualenv or scripts
+# ============================================================
+.venv/
+venv/
+env/
+
+# ============================================================
+# Docs / Outputs
+# ============================================================
+/doc_build/
+/docs/_build/
+/doxygen/
+/html/
+/*.pdf
+
+# ============================================================
+# Project-specific (Smart Curtain)
+# ============================================================
+/components/*/build/
+/components/*/.vscode/
+/components/*/__pycache__/
+/components/*/*.log
+/tests/output/
+/logs/
+/tmp/
+
+# ============================================================
+# Backup or temporary Kconfig/CMake
+# ============================================================
+Kconfig.projbuild.backup
+CMakeLists.txt.backup
+
+# ============================================================
+# End
+# ============================================================
