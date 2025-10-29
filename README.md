@@ -11,7 +11,7 @@
 - **[SOOM-Node-RED](./SOOM-Node-RED/README.md)** — 자동화/음성/ThinQ 플로우
 - **[SOOM-AI](./SOOM-AI/README.md)** - AI 모델 초기 학습, 데이터 전처리 및 시각화 등 핵심 코드 저장소
 - **[SOOM-AI.OnDevice](./SOOM-AI.OnDevice/README.md)** - 메인 추론 파이프라인  
-- **[SOOM-AI.fine_tuning](./SOOM-fine_tuning/README.md)** — 미세조정(Fine-tuning) 코드  
+- **[SOOM-AI.fine_tuning](./SOOM-AI.fine_tuning/README.md)** — 미세조정(Fine-tuning) 코드  
 - **[SOOM-EM.devices](./SOOM-EM.devices/README.md)** — ESP32 임베디드 제어 모듈
 
 ---
@@ -58,8 +58,8 @@ SOOM/
 ├─ SOOM-Voice/            # 온디바이스 음성 파이프라인 (VAD→STT→Intent→TTS)
 ├─ SOOM-Node-RED/         # Node-RED 플로우 (voice/routine/manual/ThinQ)
 ├─ SOOM-AI/               # 수면·호흡 분석, 학습/추론, 신호 전처리·증강
-├─ SOOM-AI/OnDevice       # 학습된 모델을 임베디드 환경에 배포 및 실행하기 위한 메인 추론 파이프라인
-├─ SOOM-AI.fine_tuning    # 성능 최적화 및 특정 작업 적응을 위한 미세조정 코드
+├─ SOOM-AI.OnDevice/      # 학습된 모델을 임베디드 환경에 배포 및 실행하기 위한 메인 추론 파이프라인
+├─ SOOM-AI.fine_tuning/   # 성능 최적화 및 특정 작업 적응을 위한 미세조정 코드
 ├─ SOOM-EM.devices/       # ESP32 장치별 펌웨어 (aircon/light/curtain/CSI 등)
 └─ README.md              # 현재 파일
 ```
@@ -107,8 +107,8 @@ SOOM/
 ### 공통 요구 사항
 - Node.js 18+ / npm  
 - Python 3.10+ / 가상환경  
-- MariaDB, InfluxDB, Mosquitto(MQTT)  
-- webOS OSE (RPi4) + ares-cli (IPK 배포 시)
+- FastAP, IMariaDB, InfluxDB, Mosquitto(MQTT)  
+- webOS OSE (RPi4) + ares-cli (IPK 배포 시)  
 
 ### Backend
 ```bash
