@@ -1,0 +1,9 @@
+numpy
+scipy
+pandas
+PyWavelets
+scikit-learn
+torch>=2.2
+torchvision
+pyyaml
+tqdm
