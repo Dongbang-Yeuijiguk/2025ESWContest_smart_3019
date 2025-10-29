@@ -83,7 +83,7 @@ SOOM/
 - 명령: 조명·에어컨·커튼 제어, 알람·루틴 설정, 알림 방송
 - 연동: Node-RED 플로우 및 LG ThinQ 어댑터
 
-**4. SOOM-Voice · Node-RED Flows**
+**4. SOOM-Node-RED**
 - `voice_flow`, `routine_flow`, `mannual_flow`, `Thinq_flow`
 - Node-RED Import → Deploy 후 즉시 사용 가능 (MQTT 표준 규격)
 
@@ -107,7 +107,7 @@ SOOM/
 ### 공통 요구 사항
 - Node.js 18+ / npm  
 - Python 3.10+ / 가상환경  
-- FastAP, IMariaDB, InfluxDB, Mosquitto(MQTT)  
+- FastAPI, MariaDB, InfluxDB, Mosquitto(MQTT)  
 - webOS OSE (RPi4) + ares-cli (IPK 배포 시)  
 
 ### Backend
