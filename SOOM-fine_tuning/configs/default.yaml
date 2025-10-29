@@ -1,0 +1,30 @@
+seed: 42
+model:
+  arch: simple_cnn
+  num_classes: 5
+  in_channels: 1
+train:
+  epochs: 20
+  batch_size: 64
+  lr: 5.0e-4
+  weight_decay: 1.0e-4
+  l2sp: 1.0e-3
+  freeze_epochs: 2
+  focal: false
+  mixup_alpha: 0.0
+  amp: true
+  cosine: true
+  early_stop_patience: 6
+  grad_clip: 5.0
+  num_workers: 4
+  train_val_split: 0.9
+data:
+  fs: 60
+  window: 240
+  stride: 180
+  classes: ['book', 'lie', 'phone', 'rustle', 'sit', 'stand', 'walk']
+  bandpass: [0.1, 0.5]
+  dwt_denoise: true
+  wavelet: db4
+  mrc_pca: true
+  pca_k: 1
