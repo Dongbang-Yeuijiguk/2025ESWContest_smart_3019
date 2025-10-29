@@ -6,10 +6,12 @@
 ---
 ### Quick Links  
 - **[SOOM-FE.dashboard](./SOOM-FE.dashboard/README.md)** — Frontend 대시보드
-- **[SOOM-BE.platform](./SOOM-BE.platform/README.md)** — Backend 플랫폼 (FastAPI, MariaDB, InfluxDB, MQTT)
+- **[SOOM-BE.platform](./SOOM-BE.platform/README.md)** — Backend 플랫폼 
 - **[SOOM-Voice](./SOOM-Voice/README.md)** — 온디바이스 음성 파이프라인 
-- **[SOOM-Voice · Node-RED Flows](./SOOM-Voice_NodeRED/README.md)** — 자동화/음성/ThinQ 플로우
-- **[SOOM-AI](./SOOM-AI/README.md)** — 수면/호흡 신호 분석 및 학습·추론 모듈
+- **[SOOM-Node-RED](./SOOM-Node-RED/README.md)** — 자동화/음성/ThinQ 플로우
+- **[SOOM-AI](./SOOM-AI/README.md)** - AI 모델 초기 학습, 데이터 전처리 및 시각화 등 핵심 코드 저장소
+- **[SOOM-AI.OnDevice](./SOOM-AI.OnDevice/README.md)** - 메인 추론 파이프라인  
+- **[SOOM-AI.fine_tuning](./SOOM-fine_tuning/README.md)** — 미세조정(Fine-tuning) 코드  
 - **[SOOM-EM.devices](./SOOM-EM.devices/README.md)** — ESP32 임베디드 제어 모듈
 
 ---
@@ -33,7 +35,9 @@ SOOM은 **비접촉 수면 감지**와 **스마트홈 제어/자동화**를 결�
 ---
 
 ### 시스템 아키텍처
-> **소프트웨어 아키텍쳐**
+> **소프트웨어 아키텍쳐**  
+> 대시보드, DB, AI 분석 모듈, 임베디드 디바이스, 음성 파이프라인 및 자동화 플로우(Node-RED) 로 구성된 **분산형 IoT-Edge 통합 구조**  
+> 각 모듈은 독립적으로 배포 및 실행되며, MQTT·HTTP·WebSocket을 통해 실시간으로 상호 통신  
   <img width="850" height="455" alt="image" src="https://github.com/user-attachments/assets/5bccde91-3afa-4faa-bcd8-c4c098d187a4" />
 
 <br>
@@ -52,8 +56,10 @@ SOOM/
 ├─ SOOM-FE.dashboard/     # webOS 대시보드 (Enact/React, Vite)
 ├─ SOOM-BE.platform/      # FastAPI 백엔드 (MariaDB/InfluxDB/MQTT)
 ├─ SOOM-Voice/            # 온디바이스 음성 파이프라인 (VAD→STT→Intent→TTS)
-├─ SOOM-Voice_NodeRED/    # Node-RED 플로우 (voice/routine/manual/ThinQ)
+├─ SOOM-Node-RED/         # Node-RED 플로우 (voice/routine/manual/ThinQ)
 ├─ SOOM-AI/               # 수면·호흡 분석, 학습/추론, 신호 전처리·증강
+├─ SOOM-AI/OnDevice       # 학습된 모델을 임베디드 환경에 배포 및 실행하기 위한 메인 추론 파이프라인
+├─ SOOM-AI.fine_tuning    # 성능 최적화 및 특정 작업 적응을 위한 미세조정 코드
 ├─ SOOM-EM.devices/       # ESP32 장치별 펌웨어 (aircon/light/curtain/CSI 등)
 └─ README.md              # 현재 파일
 ```
@@ -63,7 +69,7 @@ SOOM/
 - 실내 환경 모니터링: 온도·습도·공기질·미세먼지 실시간 표시 (WebSocket)
 - 수면 리포트: 점수·수면시간·뒤척임·호흡 시각화 (REST)
 - 스마트홈 제어: 조명·커튼·에어컨·공기청정기 제어
-- 자동화 루틴: 기상/취침 조건 기반 실행 (예: 조명 끄기 + 커튼 닫기)
+- 자동화 루틴 설정: 기상/취침 조건 기반 실행 루틴 설정 (예: 조명 끄기 + 커튼 닫기)
 - 빌드/배포: Vite → webOS IPK
 
 **2. SOOM-BE.platform** (FastAPI)
