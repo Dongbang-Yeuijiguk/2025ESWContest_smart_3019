@@ -4,9 +4,16 @@
 
 Wi-Fi Sensing 기반 비접촉 수면 감지 및 자동 환경 제어 시스템
 
-<div align="center">
-<img src="images/SOOM_HW.jpg" width="50%">
-</div>
+<table>
+<tr>
+<td align="center"><b>하드웨어 구성</b></td>
+<td align="center"><b>대시보드 화면</b></td>
+</tr>
+<tr>
+<td><img src="images/SOOM_HW.jpg" width="400"></td>
+<td><img src="images/SOOM_Dashboard.png" width="400"></td>
+</tr>
+</table>
 
 ---
 
