@@ -18,7 +18,7 @@
 #include "driver/ledc.h" 
 #include "DHT.h"
 
-static const char *TAG = "SMART_AC";
+static const char *TAG = "air_conditioner";
 
 /* -------------------- 구조체 정의 -------------------- */
 
@@ -166,8 +166,6 @@ static void publish_status(void) {
     cJSON_AddStringToObject(root, "mode", mode_to_str(s_state.mode));
     
     // 목표값
-    // (소수점 1자리 포맷팅을 위해 문자열로 변환하거나, valuedouble 사용)
-    // 여기서는 숫자 그대로 보냅니다.
     cJSON_AddNumberToObject(root, "target_temp", s_state.target_temp);
     cJSON_AddNumberToObject(root, "target_hum", s_state.target_hum);
 
@@ -229,8 +227,7 @@ static void ac_control_task(void *pvParameters) {
 
 // 2. 센서 태스크 (주기적 측정 & 리포트)
 static void dht_sensor_task(void *arg) {
-    // DHT 라이브러리 초기화 (가정)
-    // setDHTgpio(DHT_GPIO); 
+    setDHTgpio(DHT_GPIO); 
 
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(5000)); // 5초 주기
