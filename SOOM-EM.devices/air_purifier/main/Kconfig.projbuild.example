@@ -1,74 +1,116 @@
-menu "SOOM Air Purifier (PMS7003 + MQ135 + OLED)"
+menu "Smart Air Purifier Configuration"
 
-    menu "Wi-Fi"
+    menu "1. Wi-Fi & MQTT Settings"
         config WIFI_SSID
             string "Wi-Fi SSID"
             default "MyWiFi"
+        
         config WIFI_PASSWORD
             string "Wi-Fi Password"
             default "password1234"
-    endmenu
 
-    menu "MQTT"
         config MQTT_BROKER_URI
-            string "Broker URI (mqtt://host:port)"
-            default "mqtt://13.209.47.2:1883"
-        config MQTT_TOPIC
-            string "Publish topic"
-            default "sensor/air_purifier"
-        config MQTT_CMD_TOPIC
-            string "Command topic"
+            string "Broker URI"
+            default "mqtt://192.168.0.10:1883"
+            help
+                MQTT 브로커 주소 (예: mqtt://ip:port)
+
+        config MQTT_TOPIC_CMD
+            string "Command Topic"
             default "sensor/air_purifier/cmd"
+            help
+                명령을 수신할 토픽 (앱 -> 장치)
+
+        config MQTT_TOPIC_STATE
+            string "State Topic"
+            default "sensor/air_purifier"
+            help
+                상태를 보고할 토픽 (장치 -> 앱)
     endmenu
 
-    menu "PMS7003 UART"
+    menu "2. Hardware: Fan (L298N) & Relay"
+        config FAN_PWM_GPIO
+            int "Fan Motor PWM Pin (Connect to L298N ENA)"
+            default 4
+            help
+                팬 속도 제어용 PWM 핀. 
+                L298N의 'ENA' 핀에 연결하세요 (점퍼캡 제거 필요).
+
+        config AP_RELAY_GPIO
+            int "Motor Direction/Power Pin (Connect to L298N IN1)"
+            default 7
+            help
+                팬 전원(방향) 제어용 GPIO 핀.
+                L298N의 'IN1' 핀에 연결하세요.
+                (참고: L298N의 'IN2'는 GND에 연결하여 한 방향으로 고정하세요.)
+    endmenu
+
+    menu "3. Hardware: PMS7003 Sensor"
         config PMS_UART_PORT
-            int "UART port (0/1/2)"
-            range 0 2
+            int "UART Port Number (0 or 1)"
+            range 0 1
             default 1
+        
         config PMS_UART_TX_GPIO
-            int "TX GPIO"
+            int "UART TX Pin (Connect to PMS RX)"
             default 20
+            help
+                ESP32의 TX 핀 -> PMS7003의 RX 핀 연결
+
         config PMS_UART_RX_GPIO
-            int "RX GPIO"
+            int "UART RX Pin (Connect to PMS TX)"
             default 21
+            help
+                ESP32의 RX 핀 -> PMS7003의 TX 핀 연결
+
         config PMS_UART_BAUD
             int "Baudrate"
             default 9600
     endmenu
 
-    menu "MQ135 (ADC1)"
+    menu "4. Hardware: MQ135 Sensor"
         config MQ135_ADC_CHANNEL
-            int "ADC1 channel (0=CH0, …)"
+            int "ADC Channel (GPIO Number)"
             range 0 9
             default 0
+            help
+                MQ135 아날로그 출력이 연결된 GPIO 번호.
+                (ESP32-C6/C3의 경우 ADC1 채널 매핑 확인 필요)
+
         config MQ135_ADC_ATTEN
-            int "ADC attenuation (0=0dB,1=2.5dB,2=6dB,3=11dB)"
+            int "ADC Attenuation (0~3)"
             range 0 3
             default 3
+            help
+                3 = 11dB (약 0 ~ 3.3V 측정 범위)
+
         config MQ135_SAMPLES
-            int "Averaging samples"
+            int "Averaging Samples"
             range 1 64
             default 8
+            help
+                값을 읽을 때 평균을 낼 샘플 갯수
+
         config MQ135_RL_KOHM
-            int "RL (kΩ)"
+            int "RL Resistance (kΩ)"
             range 1 100
             default 10
+            help
+                보드에 장착된 부하 저항 값 (보통 10kΩ 또는 1kΩ)
+
         config MQ135_R0_KOHM
-            int "R0 (kΩ, clean air)"
+            int "R0 Resistance (kΩ)"
             range 1 100
             default 30
+            help
+                깨끗한 공기에서 측정한 기준 저항값 (보정용)
+
         config MQ135_VREF_MV
-            int "Fallback Vref (mV)"
+            int "Reference Voltage (mV)"
             range 900 1300
             default 1100
-        config AP_RELAY_GPIO
-            int "Relay GPIO"
-            default 10
-        config AQ_THRESHOLD
-            int "AQ ON threshold (hysteresis base)"
-            range 1 500
-            default 50
+            help
+                ADC 캘리브레이션 실패 시 사용할 기준 전압
     endmenu
 
 endmenu
