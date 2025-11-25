@@ -1,91 +1,354 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include "air_conditioner_main.h"
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/event_groups.h"
-#include "esp_system.h"
-#include "esp_wifi.h"
-#include "esp_event.h"
-#include "esp_log.h"
+#include "freertos/queue.h"
+
 #include "nvs_flash.h"
+#include "esp_log.h"
+#include "esp_event.h"
+#include "esp_netif.h"
+#include "esp_wifi.h"
 #include "mqtt_client.h"
 #include "cJSON.h"
-#include "driver/gpio.h"
-#include "driver/ledc.h"
-#include "esp_sntp.h"
-#include "dht.h"
 
-static const char *TAG = "SOOM_AC";
+#include "driver/ledc.h" 
+#include "DHT.h"
 
-#include "sdkconfig.h"   // ← Kconfig 값 불러오기
+static const char *TAG = "SMART_AC";
 
-/* -------------------- 핀 설정 -------------------- */
-#define MOTOR_A1A CONFIG_MOTOR_A1A
-#define MOTOR_A1B CONFIG_MOTOR_A1B
-#define RELAY_GPIO CONFIG_RELAY_GPIO
-#define DHT_GPIO CONFIG_DHT_GPIO
+/* -------------------- 구조체 정의 -------------------- */
 
-/* -------------------- MQTT 설정 -------------------- */
-#define MQTT_URI CONFIG_MQTT_URI
-#define MQTT_TOPIC_SENSOR CONFIG_MQTT_TOPIC_SENSOR
-#define MQTT_TOPIC_CMD CONFIG_MQTT_TOPIC_CMD
+// 에어컨 모드 열거형
+typedef enum {
+    AC_MODE_OFF = 0,
+    AC_MODE_LOW,
+    AC_MODE_MID,
+    AC_MODE_HIGH
+} ac_mode_t;
 
-/* -------------------- 글로벌 변수 -------------------- */
-static esp_mqtt_client_handle_t mqtt_client = NULL;
-static float target_temp = 25.0, target_hum = 50.0;
-static char target_mode[10] = "low";
-static bool ac_power = false;
+// 에어컨 상태 구조체
+typedef struct {
+    bool power_on;
+    ac_mode_t mode;
+    float target_temp;
+    float target_hum;
+    
+    // 센서 측정값 (리포트용)
+    float current_temp;
+    float current_hum;
+} ac_state_t;
 
-/* -------------------- PWM 설정 -------------------- */
-#define PWM_CHANNEL       LEDC_CHANNEL_0
-#define PWM_TIMER         LEDC_TIMER_0
-#define PWM_MODE          LEDC_LOW_SPEED_MODE
-#define PWM_DUTY_RES      LEDC_TIMER_8_BIT  // 0~255
-#define PWM_FREQ_HZ       5000              // 5kHz
+// Queue 명령 메시지
+typedef struct {
+    bool update_power;
+    bool power_val;
 
-static void motor_init(void) {
-    // 방향핀 설정
-    gpio_set_direction(MOTOR_A1A, GPIO_MODE_OUTPUT);
-    gpio_set_direction(MOTOR_A1B, GPIO_MODE_OUTPUT);
+    bool update_mode;
+    ac_mode_t mode_val;
 
-    // PWM 출력 설정 (속도 제어)
-    ledc_timer_config_t timer_cfg = {
-        .speed_mode = PWM_MODE,
-        .timer_num = PWM_TIMER,
-        .duty_resolution = PWM_DUTY_RES,
-        .freq_hz = PWM_FREQ_HZ,
-        .clk_cfg = LEDC_AUTO_CLK
+    bool update_target;
+    float temp_val;
+    float hum_val;
+} ac_cmd_t;
+
+/* -------------------- 전역 변수 -------------------- */
+static esp_mqtt_client_handle_t s_mqtt = NULL;
+static QueueHandle_t s_ac_queue = NULL;
+
+static ac_state_t s_state = {
+    .power_on = false,
+    .mode = AC_MODE_LOW,
+    .target_temp = DEFAULT_TARGET_TEMP,
+    .target_hum = DEFAULT_TARGET_HUM,
+    .current_temp = 0.0f,
+    .current_hum = 0.0f
+};
+
+/* -------------------- Hardware Init -------------------- */
+
+static void hw_init_motor_relay(void) {
+    // 1. Relay & Direction Pin
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << RELAY_GPIO) | (1ULL << MOTOR_A1B_GPIO),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = 0,
+        .pull_down_en = 0,
+        .intr_type = GPIO_INTR_DISABLE
     };
-    ledc_timer_config(&timer_cfg);
+    gpio_config(&io_conf);
+    gpio_set_level(RELAY_GPIO, 0); // 초기 OFF
+    gpio_set_level(MOTOR_A1B_GPIO, 0); // 방향 초기화
 
-    ledc_channel_config_t ch_cfg = {
-        .gpio_num = MOTOR_A1A,
-        .speed_mode = PWM_MODE,
-        .channel = PWM_CHANNEL,
-        .timer_sel = PWM_TIMER,
-        .duty = 0,
-        .hpoint = 0
+    // 2. PWM (Speed Pin)
+    ledc_timer_config_t ledc_timer = {
+        .speed_mode       = FAN_LEDC_MODE,
+        .timer_num        = FAN_LEDC_TIMER,
+        .duty_resolution  = FAN_LEDC_DUTY_RES,
+        .freq_hz          = FAN_LEDC_FREQUENCY,
+        .clk_cfg          = LEDC_AUTO_CLK
     };
-    ledc_channel_config(&ch_cfg);
+    ESP_ERROR_CHECK(ledc_timer_config(&ledc_timer));
 
-    ESP_LOGI(TAG, "Motor + PWM initialized");
+    ledc_channel_config_t ledc_channel = {
+        .speed_mode     = FAN_LEDC_MODE,
+        .channel        = FAN_LEDC_CHANNEL,
+        .timer_sel      = FAN_LEDC_TIMER,
+        .intr_type      = LEDC_INTR_DISABLE,
+        .gpio_num       = FAN_LEDC_OUTPUT_IO,
+        .duty           = 0,
+        .hpoint         = 0
+    };
+    ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel));
 }
 
-/* -------------------- Wi-Fi 이벤트 -------------------- */
-static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, void *data) {
-    if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) {
+/* -------------------- Helper Functions -------------------- */
+
+static ac_mode_t str_to_mode(const char* s) {
+    if (!s) return AC_MODE_LOW;
+    if (!strcasecmp(s, "low")) return AC_MODE_LOW;
+    if (!strcasecmp(s, "mid")) return AC_MODE_MID;
+    if (!strcasecmp(s, "high")) return AC_MODE_HIGH;
+    return AC_MODE_LOW;
+}
+
+static const char* mode_to_str(ac_mode_t m) {
+    switch (m) {
+        case AC_MODE_LOW: return "low";
+        case AC_MODE_MID: return "mid";
+        case AC_MODE_HIGH: return "high";
+        default: return "off";
+    }
+}
+
+static void apply_ac_hardware(const ac_state_t* s) {
+    if (s->power_on) {
+        // 1. Relay ON
+        gpio_set_level(RELAY_GPIO, 1);
+        
+        // 2. Motor Speed (PWM)
+        uint32_t duty = 0;
+        switch (s->mode) {
+            case AC_MODE_LOW:  duty = 80;  break; // ~30%
+            case AC_MODE_MID:  duty = 160; break; // ~60%
+            case AC_MODE_HIGH: duty = 255; break; // 100%
+            default: duty = 80; break;
+        }
+        
+        // 방향 설정 (정방향)
+        gpio_set_level(MOTOR_A1B_GPIO, 0);
+        ledc_set_duty(FAN_LEDC_MODE, FAN_LEDC_CHANNEL, duty);
+        ledc_update_duty(FAN_LEDC_MODE, FAN_LEDC_CHANNEL);
+
+        ESP_LOGI(TAG, "AC ON: Mode=%s, Duty=%lu", mode_to_str(s->mode), duty);
+
+    } else {
+        // Power OFF
+        gpio_set_level(RELAY_GPIO, 0);
+        ledc_set_duty(FAN_LEDC_MODE, FAN_LEDC_CHANNEL, 0);
+        ledc_update_duty(FAN_LEDC_MODE, FAN_LEDC_CHANNEL);
+        ESP_LOGI(TAG, "AC OFF");
+    }
+}
+
+/* -------------------- MQTT Publish -------------------- */
+
+static void publish_status(void) {
+    if (!s_mqtt) return;
+
+    cJSON* root = cJSON_CreateObject();
+    
+    // 상태 정보
+    cJSON_AddStringToObject(root, "power", s_state.power_on ? "on" : "off");
+    cJSON_AddStringToObject(root, "mode", mode_to_str(s_state.mode));
+    
+    // 목표값
+    // (소수점 1자리 포맷팅을 위해 문자열로 변환하거나, valuedouble 사용)
+    // 여기서는 숫자 그대로 보냅니다.
+    cJSON_AddNumberToObject(root, "target_temp", s_state.target_temp);
+    cJSON_AddNumberToObject(root, "target_hum", s_state.target_hum);
+
+    // 센서 측정값 (반올림 처리)
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%.1f", s_state.current_temp);
+    cJSON_AddStringToObject(root, "temperature", buf);
+    
+    snprintf(buf, sizeof(buf), "%.1f", s_state.current_hum);
+    cJSON_AddStringToObject(root, "humidity", buf);
+
+    char* out = cJSON_PrintUnformatted(root);
+    if (out) {
+        esp_mqtt_client_publish(s_mqtt, MQTT_TOPIC_SENSOR, out, 0, 1, 0);
+        ESP_LOGI(TAG, "Published: %s", out);
+        cJSON_free(out);
+    }
+    cJSON_Delete(root);
+}
+
+/* -------------------- Tasks -------------------- */
+
+// 1. 제어 태스크 (MQTT 명령 처리)
+static void ac_control_task(void *pvParameters) {
+    ac_cmd_t cmd;
+    while (1) {
+        if (xQueueReceive(s_ac_queue, &cmd, portMAX_DELAY)) {
+            bool changed = false;
+
+            if (cmd.update_power) {
+                if (s_state.power_on != cmd.power_val) {
+                    s_state.power_on = cmd.power_val;
+                    changed = true;
+                }
+            }
+
+            if (cmd.update_mode) {
+                if (s_state.mode != cmd.mode_val) {
+                    s_state.mode = cmd.mode_val;
+                    changed = true;
+                }
+            }
+
+            if (cmd.update_target) {
+                s_state.target_temp = cmd.temp_val;
+                s_state.target_hum = cmd.hum_val;
+                // 목표값 변경은 하드웨어 즉시 반영보다는 로직에 쓰임
+                // 여기서는 단순히 상태 업데이트로 간주
+                changed = true; 
+            }
+
+            if (changed) {
+                apply_ac_hardware(&s_state);
+                publish_status();
+            }
+        }
+    }
+}
+
+// 2. 센서 태스크 (주기적 측정 & 리포트)
+static void dht_sensor_task(void *arg) {
+    // DHT 라이브러리 초기화 (가정)
+    // setDHTgpio(DHT_GPIO); 
+
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(5000)); // 5초 주기
+
+        int ret = readDHT();
+        errorHandler(ret);
+        float hum = getHumidity();
+        float temp = getTemperature();
+
+        // 유효성 검사
+        if (hum > 0 && temp > -100) {
+             // 반올림
+            temp = roundf(temp * 10.0f) / 10.0f;
+            hum = roundf(hum * 10.0f) / 10.0f;
+
+            // 상태 업데이트 (Mutex 없이 단순 대입. 필요 시 Mutex 추가)
+            s_state.current_temp = temp;
+            s_state.current_hum = hum;
+
+            // 주기적 리포트
+            publish_status();
+        }
+    }
+}
+
+/* -------------------- MQTT Handler -------------------- */
+
+static void mqtt_on_data(esp_mqtt_event_handle_t event) {
+    if (!event->topic || event->topic_len <= 0) return;
+    if (strncmp(event->topic, MQTT_TOPIC_CMD, event->topic_len) != 0) return;
+
+    char *payload = (char *)malloc(event->data_len + 1);
+    if (!payload) return;
+    memcpy(payload, event->data, event->data_len);
+    payload[event->data_len] = '\0';
+
+    cJSON *root = cJSON_Parse(payload);
+    if (root) {
+        ac_cmd_t cmd = {0};
+        bool valid = false;
+
+        // 1. Power
+        cJSON *j_power = cJSON_GetObjectItemCaseSensitive(root, "ac_power");
+        if (cJSON_IsString(j_power) && j_power->valuestring) {
+            cmd.update_power = true;
+            cmd.power_val = (strcasecmp(j_power->valuestring, "on") == 0);
+            valid = true;
+        }
+
+        // 2. Mode
+        cJSON *j_mode = cJSON_GetObjectItemCaseSensitive(root, "target_ac_mode");
+        if (cJSON_IsString(j_mode) && j_mode->valuestring) {
+            cmd.update_mode = true;
+            cmd.mode_val = str_to_mode(j_mode->valuestring);
+            valid = true;
+        }
+
+        // 3. Target Temp/Hum
+        cJSON *j_temp = cJSON_GetObjectItemCaseSensitive(root, "target_ac_temperature");
+        cJSON *j_hum = cJSON_GetObjectItemCaseSensitive(root, "target_ac_humidity");
+        
+        if (cJSON_IsNumber(j_temp)) {
+            cmd.update_target = true;
+            cmd.temp_val = (float)j_temp->valuedouble;
+            valid = true;
+        } else {
+             cmd.temp_val = s_state.target_temp; // 유지
+        }
+
+        if (cJSON_IsNumber(j_hum)) {
+            cmd.update_target = true;
+            cmd.hum_val = (float)j_hum->valuedouble;
+            valid = true;
+        } else {
+             cmd.hum_val = s_state.target_hum; // 유지
+        }
+
+        if (valid) {
+            xQueueSend(s_ac_queue, &cmd, 0);
+        }
+        cJSON_Delete(root);
+    }
+    free(payload);
+}
+
+static void mqtt_event_handler(void *arg, esp_event_base_t base, int32_t eid, void *edata) {
+    esp_mqtt_event_handle_t event = (esp_mqtt_event_handle_t)edata;
+    switch (event->event_id) {
+        case MQTT_EVENT_CONNECTED:
+            ESP_LOGI(TAG, "MQTT Connected");
+            esp_mqtt_client_subscribe(s_mqtt, MQTT_TOPIC_CMD, 1);
+            publish_status();
+            break;
+        case MQTT_EVENT_DATA:
+            mqtt_on_data(event);
+            break;
+        default: break;
+    }
+}
+
+/* -------------------- Wi-Fi -------------------- */
+
+static void wifi_event_handler(void* arg, esp_event_base_t event_base,
+                               int32_t event_id, void* event_data) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
-    } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
-        ESP_LOGW(TAG, "Wi-Fi disconnected. Reconnecting...");
+    } 
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        ESP_LOGW(TAG, "Wi-Fi disconnected. Retrying...");
         esp_wifi_connect();
-    } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
-        ip_event_got_ip_t *event = (ip_event_got_ip_t *)data;
+    } 
+    else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "Got IP: " IPSTR, IP2STR(&event->ip_info.ip));
     }
 }
 
-static void wifi_init_sta(void) {
+static void wifi_start(void) {
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_sta();
@@ -93,176 +356,55 @@ static void wifi_init_sta(void) {
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL);
-    esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL);
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL));
 
-    wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = CONFIG_WIFI_SSID,
-            .password = CONFIG_WIFI_PASS,
-            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
-        },
-    };
+    wifi_config_t wifi_config = {0};
+    strncpy((char *)wifi_config.sta.ssid, WIFI_SSID, sizeof(wifi_config.sta.ssid) - 1);
+    strncpy((char *)wifi_config.sta.password, WIFI_PASSWORD, sizeof(wifi_config.sta.password) - 1);
+    wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_LOGI(TAG, "Wi-Fi init done, connecting to %s", CONFIG_WIFI_SSID);
-}
-
-/* -------------------- SNTP 시간 초기화 -------------------- */
-static void sntp_init_kst(void) {
-    ESP_LOGI(TAG, "Initializing SNTP (KST)");
-    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    esp_sntp_setservername(0, "pool.ntp.org");
-    esp_sntp_init();
-    setenv("TZ", "KST-9", 1);
-    tzset();
-}
-
-/* -------------------- 모터 및 릴레이 제어 -------------------- */
-static void set_motor_speed(const char *mode) {
-    int duty = 0;
-
-    if (strcmp(mode, "low") == 0)
-        duty = 80;   // 약 30%
-    else if (strcmp(mode, "mid") == 0)
-        duty = 160;  // 약 60%
-    else if (strcmp(mode, "high") == 0)
-        duty = 255;  // 최대 속도
-    else
-        duty = 0;
-
-    // 정방향 회전
-    gpio_set_level(MOTOR_A1B, 0);
-    ledc_set_duty(PWM_MODE, PWM_CHANNEL, duty);
-    ledc_update_duty(PWM_MODE, PWM_CHANNEL);
-
-    ESP_LOGI(TAG, "Motor speed set: %s (%d/255)", mode, duty);
-}
-
-static void ac_control_update(void) {
-    if (ac_power) {
-        gpio_set_level(RELAY_GPIO, 1);  // 릴레이 ON
-        set_motor_speed(target_mode);
-    } else {
-        gpio_set_level(RELAY_GPIO, 0);  // 릴레이 OFF
-        ledc_set_duty(PWM_MODE, PWM_CHANNEL, 0);
-        ledc_update_duty(PWM_MODE, PWM_CHANNEL);
-    }
-}
-
-/* -------------------- MQTT 이벤트 -------------------- */
-static void mqtt_event_handler(void *arg, esp_event_base_t base, int32_t event_id, void *event_data) {
-    esp_mqtt_event_handle_t event = event_data;
-
-    switch (event_id) {
-        case MQTT_EVENT_CONNECTED:
-            ESP_LOGI(TAG, "MQTT connected");
-            esp_mqtt_client_subscribe(mqtt_client, MQTT_TOPIC_CMD, 1);
-            break;
-        case MQTT_EVENT_DATA: {
-            char topic[64];
-            snprintf(topic, event->topic_len + 1, "%.*s", event->topic_len, event->topic);
-
-            if (strcmp(topic, MQTT_TOPIC_CMD) == 0) {
-                char data[256];
-                snprintf(data, event->data_len + 1, "%.*s", event->data_len, event->data);
-                ESP_LOGI(TAG, "Received CMD: %s", data);
-
-                cJSON *root = cJSON_Parse(data);
-                if (root) {
-                    cJSON *p = cJSON_GetObjectItem(root, "ac_power");
-                    cJSON *t = cJSON_GetObjectItem(root, "target_ac_temperature");
-                    cJSON *h = cJSON_GetObjectItem(root, "target_ac_humidity");
-                    cJSON *m = cJSON_GetObjectItem(root, "target_ac_mode");
-
-                    if (p && cJSON_IsString(p))
-                        ac_power = (strcmp(p->valuestring, "on") == 0);
-                    if (t && cJSON_IsNumber(t))
-                        target_temp = t->valuedouble;
-                    if (h && cJSON_IsNumber(h))
-                        target_hum = h->valuedouble;
-                    if (m && cJSON_IsString(m))
-                        strncpy(target_mode, m->valuestring, sizeof(target_mode));
-
-                    ac_control_update();
-                    cJSON_Delete(root);
-                }
-            }
-            break;
-        }
-        default:
-            break;
-    }
-}
-
-/* -------------------- MQTT 초기화 -------------------- */
-static void mqtt_app_start(void) {
-    esp_mqtt_client_config_t mqtt_cfg = {
-        .broker.address.uri = MQTT_URI,
-    };
-
-    mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
-    esp_mqtt_client_register_event(mqtt_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
-    esp_mqtt_client_start(mqtt_client);
-}
-
-/* -------------------- DHT22 태스크 -------------------- */
-static void dht_task(void *arg) {
-    setDHTgpio(DHT_GPIO);
-    while (1) {
-        int ret = readDHT();
-        errorHandler(ret);
-
-        // float hum = getHumidity();
-        // float tmp = getTemperature();
-
-        // if (!isnan(hum) && !isnan(tmp)) {
-        //     cJSON *root = cJSON_CreateObject();
-        //     cJSON_AddStringToObject(root, "power", ac_power ? "on" : "off");
-        //     cJSON_AddNumberToObject(root, "temperature", tmp);
-        //     cJSON_AddNumberToObject(root, "humidity", hum);
-        //     cJSON_AddStringToObject(root, "mode", target_mode);
-
-        float hum = getHumidity();
-        float tmp = getTemperature();
-
-        // 1자리 반올림
-        hum = roundf(hum * 10.0f) / 10.0f;
-        tmp = roundf(tmp * 10.0f) / 10.0f;
-
-        char hum_s[8], tmp_s[8];
-        snprintf(hum_s, sizeof(hum_s), "%.1f", hum);
-        snprintf(tmp_s, sizeof(tmp_s), "%.1f", tmp);
-
-        if (!isnan(hum) && !isnan(tmp)) {
-            cJSON *root = cJSON_CreateObject();
-            cJSON_AddStringToObject(root, "power", ac_power ? "on" : "off");
-            cJSON_AddStringToObject(root, "temperature", tmp_s);
-            cJSON_AddStringToObject(root, "humidity", hum_s);
-            cJSON_AddStringToObject(root, "mode", target_mode);
-            char *msg = cJSON_PrintUnformatted(root);
-            cJSON_Delete(root);
-
-            esp_mqtt_client_publish(mqtt_client, MQTT_TOPIC_SENSOR, msg, 0, 1, 0);
-            ESP_LOGI(TAG, "Published: %s", msg);
-            free(msg);
-        }
-        vTaskDelay(pdMS_TO_TICKS(5000));
-    }
 }
 
 /* -------------------- app_main -------------------- */
+
 void app_main(void) {
-    ESP_ERROR_CHECK(nvs_flash_init());
-    wifi_init_sta();
-    sntp_init_kst();
-    mqtt_app_start();
+    // 1. NVS
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
 
-    gpio_set_direction(RELAY_GPIO, GPIO_MODE_OUTPUT);
-    motor_init();
+    // 2. Queue
+    s_ac_queue = xQueueCreate(5, sizeof(ac_cmd_t));
 
-    gpio_set_level(RELAY_GPIO, 0);
+    // 3. Hardware
+    hw_init_motor_relay();
 
-    xTaskCreate(dht_task, "dht_task", 4096, NULL, 5, NULL);
+    // DHT 라이브러리 초기화
+    setDHTgpio(DHT_GPIO);
+
+    // 4. Tasks
+    // 제어 태스크 (높은 우선순위)
+    xTaskCreate(ac_control_task, "ac_ctrl", 4096, NULL, 5, NULL);
+    // 센서 태스크 (낮은 우선순위)
+    xTaskCreate(dht_sensor_task, "ac_dht", 4096, NULL, 3, NULL);
+
+    // 5. Wi-Fi
+    wifi_start();
+
+    // 6. MQTT
+    esp_mqtt_client_config_t mcfg = {
+        .broker.address.uri = MQTT_BROKER_URI,
+    };
+    s_mqtt = esp_mqtt_client_init(&mcfg);
+    esp_mqtt_client_register_event(s_mqtt, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
+    ESP_ERROR_CHECK(esp_mqtt_client_start(s_mqtt));
+
+    ESP_LOGI(TAG, "Smart AC System Started.");
 }
